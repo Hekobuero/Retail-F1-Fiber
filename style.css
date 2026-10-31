@@ -103,3 +103,57 @@ input:focus{border-color:#ff4fa8}
   .item-slot{top:64px}
 }
 .shake{animation:shk .35s}@keyframes shk{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* Auswahl-Karussell */
+.truck-idx{float:right;font-size:11px;color:#fff;letter-spacing:0}
+.truck-idx span{display:block;font-size:9px;letter-spacing:1px;color:#ff8cc6;margin-top:2px}
+/* HUD-Ergänzungen */
+.hud-blitz{font-size:15px;margin-top:2px;color:#fff}
+.hud-blitz.warn{color:#ff5050;animation:blink .6s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+.hud-speed.fast{color:#ffde00}
+.hud-speed::after{content:" km/h";font-size:13px}
+.hud-draft{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(max(14px,env(safe-area-inset-bottom)) + 34px);font-size:13px;font-weight:bold;color:#9ff;text-shadow:1px 1px 0 #000}
+/* Blitz */
+.flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:20}
+.flash.go{animation:flash .55s ease-out}
+@keyframes flash{0%{opacity:.95}100%{opacity:0}}
+/* Norman-Anruf: fährt von rechts rein, oberhalb von GAS/FEUER */
+.norman{position:fixed;top:max(52px,calc(env(safe-area-inset-top) + 46px));right:max(10px,env(safe-area-inset-right));z-index:15;display:flex;gap:10px;align-items:center;width:min(330px,46vw);padding:10px 12px;background:rgba(20,20,26,.92);border:2px solid #E20074;border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.5);transform:translateX(calc(100% + 40px));transition:transform .45s cubic-bezier(.2,.9,.3,1.2);pointer-events:none}
+.norman.show{transform:translateX(0)}
+.n-icon{font-size:30px;width:46px;height:46px;border-radius:50%;background:#2fbf4f;display:flex;align-items:center;justify-content:center;flex:none;animation:ringshake .5s infinite}
+@keyframes ringshake{0%,100%{transform:rotate(0)}25%{transform:rotate(-14deg)}75%{transform:rotate(14deg)}}
+.n-head{font-size:11px;color:#ff8cc6;letter-spacing:.5px}
+.n-msg{font-size:14px;font-weight:bold;line-height:1.25}
+.restable tr.dsq td{color:#ff7070;text-decoration:none}
+@media (max-height:430px){.norman{width:min(300px,42vw);padding:8px 10px}.n-msg{font-size:12px}.n-icon{width:38px;height:38px;font-size:24px}}
+/* Bestenlisten */
+.top-r{display:flex;gap:8px;align-items:center}
+.board-box{max-width:760px}
+.lb-msg{padding:22px 8px;font-size:16px;opacity:.9}
+.lb-tabs{display:none;gap:8px;justify-content:center;margin:6px 0}
+.lb-tabs .chip.on{background:#E20074;color:#fff}
+.lb-cols{display:flex;gap:14px;align-items:flex-start}
+.lb-col{flex:1;min-width:0}
+.lb-col h3{margin:6px 0 2px;font-size:14px;letter-spacing:1px;color:#ff9ad0}
+.lb-col .restable{font-size:13px;margin:4px 0}
+.lb-col .restable td{padding:3px 5px}
+.lb-col .restable small{opacity:.6;font-size:10px}
+.lb-empty{text-align:center!important;opacity:.7}
+.res-stats{min-height:1em;font-size:12px;margin:2px 0}
+@media (max-width:620px){
+  .lb-tabs{display:flex}
+  .lb-cols{display:block}
+  .lb-col{display:none}
+  .lb-col.on{display:block}
+}
+@media (max-height:430px){
+  .board-box{padding:8px 12px}
+  .lb-col .restable{font-size:12px}
+  .lb-col .restable td{padding:2px 4px}
+  .lb-col h3{font-size:12px;margin:2px 0}
+}
+.board-head{display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:-16px;background:rgba(20,6,16,.97);z-index:2;padding:2px 0}
+.board-head .lbl{margin:0}
+.board-head span{width:90px}
+.board-head .btn{padding:6px 10px;font-size:13px}
