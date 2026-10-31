@@ -212,3 +212,4 @@ input:focus{border-color:#ff4fa8}
   .tbtn.mine{width:52px;height:52px;right:130px;bottom:10px}
   .loot-roll{top:58px;width:58px;height:58px;left:calc(50% - 138px)}
 }
+.build-label{position:absolute;left:max(8px,env(safe-area-inset-left));bottom:4px;font-size:10px;color:rgba(255,255,255,.55);pointer-events:none;letter-spacing:.5px}

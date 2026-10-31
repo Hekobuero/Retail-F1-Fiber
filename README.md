@@ -41,7 +41,9 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
   - Fahrzeuge stoßen nur gegeneinander und fahren weiter: kein Dreher, kein Kontrollverlust, kein Zurückwerfen.
   - Sie werden physisch auseinandergeschoben, damit sie sich nicht überlappen, und bekommen einen kleinen Seitenschubs, damit sie aneinander vorbeigleiten.
   - Ein Rempler kostet höchstens ca. 4 % Tempo. Dazu gibt es ein kurzes dumpfes Rumms, ein leichtes Kamerawackeln und auf Handys eine kurze Vibration.
-  - Das gilt für KI und Multiplayer gleich. Dreher gibt es nur noch durch HA-Only-Treffer.
+  - **Bande:** Man prallt ab und fährt weiter. Es gibt einen einmaligen kleinen Tempoverlust, und der Truck richtet sich sanft parallel zur Bande aus (höchstens ~90°/s) – kein Drehen.
+  - Das gilt für KI und Multiplayer gleich. Dreher gibt es **nur** durch HA-Only-Treffer, die Rakete und Business-Minen; dabei sagt immer ein Toast, was einen getroffen hat.
+  - Die KI schießt HA-Only-Verträge erst ab 16 m Abstand und legt Minen nie direkt vor einem Hintermann (unter 22 m) ab. So sieht ein Treffer nie wie ein Crash aus.
 - **Norman ruft an:** Ab **150 km/h** fährt von rechts ein Anruf-Fenster herein: „Norman ruft an: Du fährst zu schnell! Der Vermieter beschwert sich.“
   - Es klingelt, das Fenster bleibt ca. 3 s und meldet sich höchstens alle ~18 s.
 - **Blitzer (Starenkasten):**
@@ -67,7 +69,8 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
   - Die KI sammelt und legt Minen auch.
   - Im Multiplayer werden Ablegen und Entfernen per ID übertragen; der erste Treffer gewinnt.
 - **TV-VERTRÄGE und RAKETE:**
-  - **Wo:** Die blauen, schwebenden TV-Vertrag-Symbole liegen **nur in Kurven**, auf der Ideallinie am Scheitelpunkt (Innenseite). Sie stehen in Gruppen von **2–4** pro Kurve, drehen sich und leuchten nachts.
+  - **Wo:** Die TV-Verträge liegen **nur in Kurven**, auf der befahrenen Ideallinie: leicht zur Kurven-Innenseite (ca. 2–3 m neben der Mitte), sodass man natürlich hindurchfährt. Sie stehen in Gruppen von **2–4** pro Kurve.
+  - **Aussehen:** Großes, schwebendes Magenta/Weiß-Symbol mit „TV“, pulsierendem Leuchten, einem Lichtstrahl nach oben und einem Ring am Boden. Man sieht sie schon von Weitem, nachts noch stärker.
   - **Nachschub:** Eingesammelte kommen nach 14 s wieder, damit auch in späteren Runden welche da sind.
   - **Zähler:** Das HUD zeigt „📺 TV x/5“. Jeder Start beginnt bei 0, mehr als 5 geht nicht.
   - **Rakete:** Bei 5/5 leuchtet der **🚀 RAKETE**-Button (links neben FEUER) bzw. Taste **R**. Abfeuern verbraucht alle 5.
@@ -117,6 +120,12 @@ Gemeldet wird nur vom eigenen Gerät, für den eigenen Truck und genau einmal pr
 - die RPC-Funktion `f1_add_result(name, won, hits, truck)`. Sie zählt per *security definer* hoch, ist auf höchstens 20 Treffer und 1 Meldung pro Name alle 20 s begrenzt und für anon freigegeben.
 
 Die Flappy-Tabelle `scores` wird nicht angefasst. Solange die Tabelle fehlt, zeigt das Spiel „Bestenliste noch nicht eingerichtet“ und läuft normal weiter.
+
+## Version und Cache
+
+- Im Fahrzeugmenü steht unten links die Build-Version (z. B. „Version 20261031-1250“).
+- `style.css` und `js/main.js` werden mit `?v=<Build>` eingebunden, und `index.html` hat no-cache-Meta-Tags. So lädt ein Handy nach einem Update die neue Version.
+- GitHub Pages schickt `index.html` trotzdem mit `max-age=600`. Im Zweifel einmal neu laden; passen HTML und Skript nicht zusammen, zeigt das Label „⚠️ bitte neu laden“.
 
 ## Steuerung
 **Smartphone (Querformat, empfohlen).** Auf Touch-Geräten werden die Touch-Steuerelemente automatisch eingeblendet.

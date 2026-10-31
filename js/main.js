@@ -37,6 +37,7 @@ function fmtTime(ms) {
 const $ = id => document.getElementById(id);
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 const isMobile = isTouch && Math.min(screen.width, screen.height) < 900;
+const BUILD = '20261031-1250';
 function uid() { return Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3); }
 
 /* =====================================================================
@@ -1188,6 +1189,7 @@ class Vehicle {
   physics(dt, inp) {
     const st = this.stats;
     if (this.crashCD > 0) this.crashCD -= dt;
+    if (this.wallCD > 0) this.wallCD -= dt;
     if (this.dsq) { this.speed *= Math.pow(0.05, dt); inp = { gas: 0, brake: 0, steer: 0 }; }
     if (this.spinT > 0) { this.spinT -= dt; inp = { gas: 0, brake: 0, steer: 0 }; this.speed *= Math.pow(0.4, dt); }
     if (this.invulnT > 0) this.invulnT -= dt;
@@ -1208,10 +1210,12 @@ class Vehicle {
     const i2 = nearestIdx(this.x, this.z, this.idx), lat2 = lateral(i2, this.x, this.z);
     if (Math.abs(lat2) > WALL) {
       const l = track.left[i2], push = (Math.abs(lat2) - WALL) * Math.sign(lat2);
-      this.x -= l.x * push; this.z -= l.z * push; this.speed *= 0.82;
+      // Bande: abprallen und weiterfahren – kein Drehen, nur sanft parallel zur Bande ausrichten
+      this.x -= l.x * push; this.z -= l.z * push;
+      if (!(this.wallCD > 0)) { this.speed *= 0.94; this.wallCD = 0.4; if (this.isLocal && sp > 8) sfx.bump(); }
+      this.speed *= Math.pow(0.7, dt);
       const t = track.tan[i2], th = Math.atan2(t.x, t.z), d = wrapAng(th - this.h);
-      if (Math.abs(d) < Math.PI / 2) this.h += d * 0.08;
-      if (this.isLocal && sp > 8 && Math.random() < 0.2) sfx.bump();
+      if (Math.abs(d) < Math.PI / 2) this.h += clamp(d, -1.6 * dt, 1.6 * dt); // max ~90°/s, sanft
     }
     this.updateProgress(false);
     const t = track.tan[this.idx], fwd = Math.sin(this.h) * t.x + Math.cos(this.h) * t.z;
@@ -1628,7 +1632,7 @@ function aiFire(v, dt) {
   for (const o of race.vehicles) {
     if (o === v || o.invulnT > 0 || o.out) continue;
     const dx = o.x - v.x, dz = o.z - v.z, d = Math.hypot(dx, dz);
-    if (d < 8 || d > 42) continue;
+    if (d < 16 || d > 42) continue; // nicht aus nächster Nähe – sonst wirkt ein Treffer wie ein Crash
     if (Math.abs(wrapAng(Math.atan2(dx, dz) - v.h)) < 0.22) { fireFrom(v); v.fireCD = 4 + Math.random() * 5; return; }
   }
 }
@@ -1721,7 +1725,7 @@ function bumpNudge(P, nx, nz, s) {
   // kleiner Seitenschubs weg vom anderen + minimaler Lenkimpuls
   const lx = Math.cos(P.h), lz = -Math.sin(P.h), raw = (nx * lx + nz * lz) * s, side = Math.abs(raw) < 0.1 ? s : Math.sign(raw);
   P.x += lx * side * 0.35; P.z += lz * side * 0.35;
-  P.h += side * 0.025 * Math.sign(P.speed || 1);
+  P.h += side * 0.006 * Math.sign(P.speed || 1); // nur ein Hauch Gierwinkel – kein Drehen
   P.speed *= BUMP_KEEP;
 }
 function onBump(A, B, nx, nz, rv) {
@@ -2525,15 +2529,18 @@ function rollLootKind(r = Math.random()) { let a = r * 5; for (const [k, w] of L
 
 /* ---------- Texturen ---------- */
 function tvTexture() {
-  const c = canvas(128, 128), g = c.getContext('2d');
-  g.strokeStyle = '#bff4ff'; g.lineWidth = 5; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(64, 30); g.lineTo(42, 8); g.moveTo(64, 30); g.lineTo(88, 6); g.stroke();
+  // knallig Magenta/Weiß mit großem „TV“ – gut erkennbar auf dem Handy, Tag und Nacht
+  const c = canvas(256, 256), g = c.getContext('2d');
   const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
-  rr(8, 28, 112, 84, 16); g.fillStyle = '#0a5fd6'; g.fill(); g.lineWidth = 5; g.strokeStyle = '#ffffff'; g.stroke();
-  rr(18, 38, 74, 62, 10); const gr = g.createLinearGradient(0, 38, 0, 100); gr.addColorStop(0, '#7ff9ff'); gr.addColorStop(1, '#00b4e6'); g.fillStyle = gr; g.fill();
-  g.fillStyle = '#062a5a'; g.font = 'bold 34px "Trebuchet MS",Verdana,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('TV', 55, 62);
-  g.fillStyle = '#fff'; g.fillRect(36, 80, 38, 4); g.fillRect(36, 88, 26, 4);
-  g.fillStyle = '#ffd400'; g.beginPath(); g.arc(106, 52, 6, 0, 7); g.fill(); g.fillStyle = '#9fe8ff'; g.beginPath(); g.arc(106, 72, 6, 0, 7); g.fill();
+  g.strokeStyle = '#ffffff'; g.lineWidth = 12; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(128, 62); g.lineTo(82, 14); g.moveTo(128, 62); g.lineTo(178, 10); g.stroke();
+  rr(14, 58, 228, 170, 30); g.fillStyle = '#ffffff'; g.fill();
+  rr(26, 70, 204, 146, 22); g.fillStyle = '#E20074'; g.fill();
+  rr(40, 84, 150, 118, 16); const gr = g.createLinearGradient(0, 84, 0, 202); gr.addColorStop(0, '#ff7cc4'); gr.addColorStop(1, '#ff2a98'); g.fillStyle = gr; g.fill();
+  g.fillStyle = '#ffffff'; g.font = 'bold 84px "Trebuchet MS",Verdana,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 8; g.strokeStyle = '#7a003e'; g.strokeText('TV', 115, 146); g.fillText('TV', 115, 146);
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(210, 112, 11, 0, 7); g.fill(); g.beginPath(); g.arc(210, 150, 11, 0, 7); g.fill();
+  g.font = 'bold 22px "Trebuchet MS",Verdana,sans-serif'; g.fillText('VERTRAG', 128, 244);
   return tex(c);
 }
 function glowTexture(col) {
@@ -2551,7 +2558,7 @@ function bizTexture() {
 }
 
 /* ---------- TV-Verträge in den Kurven ---------- */
-const tvItems = []; let tvBuilt = false, tvMat = null, tvHaloMat = null;
+const tvItems = []; let tvBuilt = false, tvMat = null, tvHaloMat = null, tvBeamMat = null, tvRingMat = null;
 function curveK(i) { const N = track.N, a = track.tan[(i - 3 + N) % N], b = track.tan[(i + 3) % N]; return a.x * b.z - a.z * b.x; }
 function buildTvPickups() {
   if (tvBuilt || !world || !track.N) return; tvBuilt = true;
@@ -2566,10 +2573,12 @@ function buildTvPickups() {
   let s0 = 0; while (s0 < N && on[s0]) s0++;           // Start in einer Geraden
   const segs = []; let cur = null;
   for (let n = 1; n <= N; n++) { const i = (s0 + n) % N; if (on[i]) { if (!cur) cur = { a: i, len: 0 }; cur.len++; } else if (cur) { segs.push(cur); cur = null; } }
-  tvMat = new THREE.MeshBasicMaterial({ map: tvTexture(), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
-  tvHaloMat = new THREE.SpriteMaterial({ map: glowTexture('rgba(90,220,255,1)'), color: 0x66e6ff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false });
-  const geo = new THREE.PlaneGeometry(2.3, 2.3);
-  const spacing = Math.max(3, Math.round(6.5 / stepM));
+  tvMat = new THREE.SpriteMaterial({ map: tvTexture(), transparent: true, alphaTest: 0.2, depthWrite: false });
+  tvHaloMat = new THREE.SpriteMaterial({ map: glowTexture('rgba(255,80,190,1)'), color: 0xff4fb8, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  tvBeamMat = new THREE.MeshBasicMaterial({ color: 0xff3fae, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+  tvRingMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const beamGeo = new THREE.CylinderGeometry(0.45, 0.9, 18, 10, 1, true), ringGeo = new THREE.RingGeometry(1.7, 2.1, 32);
+  const spacing = Math.max(3, Math.round(7 / stepM));
   let g = 0;
   for (const sg of segs) {
     if (sg.len < 5) continue;
@@ -2584,13 +2593,16 @@ function buildTvPickups() {
     for (let j = 0; j < maxCnt; j++) {
       const o = (j - (maxCnt - 1) / 2), i = (apex + Math.round(o * spacing) + N) % N;
       if (Math.abs(curveK(i)) < KTH * 0.9) continue;                            // nur wirklich in der Kurve
-      const lat = side * (5.2 - Math.abs(o) * 0.9);
+      // auf der befahrenen Ideallinie: leicht zur Innenseite (Scheitel), aber mitten im Fahrstreifen
+      const lat = side * (2.8 - Math.abs(o) * 0.7);
       const p = track.pts[i], li = track.left[i], x = p.x + li.x * lat, z = p.z + li.z * lat;
-      const grp = new THREE.Group(); grp.position.set(x, 2.0, z);
-      const m = new THREE.Mesh(geo, tvMat); grp.add(m);
-      const halo = new THREE.Sprite(tvHaloMat); halo.scale.set(5.2, 5.2, 1); grp.add(halo);
+      const grp = new THREE.Group(); grp.position.set(x, 0, z);
+      const icon = new THREE.Sprite(tvMat); icon.scale.set(4, 4, 1); icon.position.y = 3.1; grp.add(icon);
+      const halo = new THREE.Sprite(tvHaloMat); halo.scale.set(8, 8, 1); halo.position.y = 3.1; grp.add(halo);
+      const beam = new THREE.Mesh(beamGeo, tvBeamMat); beam.position.y = 9; grp.add(beam);
+      const ring = new THREE.Mesh(ringGeo, tvRingMat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.08; grp.add(ring);
       world.group.add(grp);
-      tvItems.push({ i, x, z, lat, k: +curveK(i).toFixed(3), group: grp, spin: m, respawn: 0, ph: Math.random() * 6 });
+      tvItems.push({ i, x, z, lat, k: +curveK(i).toFixed(3), group: grp, spin: icon, ring, respawn: 0, ph: Math.random() * 6 });
     }
     g++;
   }
@@ -2851,8 +2863,10 @@ function aiSpecials(v, dt) {
   }
   if (v.mine > 0) {
     v.mineHoldT = (v.mineHoldT || 3) - dt;
-    const chaser = race.vehicles.some(o => o !== v && !o.left && o.prog < v.prog && v.prog - o.prog < 30);
-    if (v.mineHoldT <= 0 || (chaser && Math.random() < dt * 0.8)) dropMine(v);
+    // nie direkt vor einem Hintermann ablegen (sonst wirkt es wie ein Crash-Dreher)
+    const dists = race.vehicles.filter(o => o !== v && !o.left && o.prog <= v.prog).map(o => Math.hypot(o.x - v.x, o.z - v.z));
+    const tooClose = dists.some(d => d < 22), chaser = dists.some(d => d >= 22 && d < 80);
+    if (!tooClose && (v.mineHoldT <= 0 || (chaser && Math.random() < dt * 0.8))) dropMine(v);
   }
 }
 
@@ -2872,15 +2886,16 @@ function clearSpecials() {
 }
 function updateSpecials(dt, now) {
   // TV-Verträge drehen, leuchten nachts stärker, einsammeln
-  if (tvHaloMat) tvHaloMat.opacity = 0.22 + 0.6 * TOD.nightF + Math.sin(now * 0.006) * 0.08;
+  if (tvHaloMat) { const pu = Math.sin(now * 0.006); tvHaloMat.opacity = 0.45 + 0.45 * TOD.nightF + pu * 0.1; tvBeamMat.opacity = 0.16 + 0.22 * TOD.nightF + pu * 0.04; }
   for (const it of tvItems) {
     if (it.respawn > 0) { it.respawn -= dt; if (it.respawn <= 0) it.group.visible = true; else continue; }
-    it.spin.rotation.y += dt * 2.4; it.group.position.y = 2.0 + Math.sin(now * 0.004 + it.ph) * 0.25;
+    const bob = Math.sin(now * 0.004 + it.ph); it.spin.position.y = 3.1 + bob * 0.3; const sc = 4 * (1 + 0.06 * Math.sin(now * 0.009 + it.ph)); it.spin.scale.set(sc, sc, 1); it.ring.rotation.z += dt * 1.5;
     for (const v of race.vehicles) {
       if (v.remote || v.left || v.dsq) continue;
-      if (Math.hypot(v.x - it.x, v.z - it.z) < 2.6) {
+      if (Math.hypot(v.x - it.x, v.z - it.z) < 3.3) {
         it.respawn = TV_RESPAWN; it.group.visible = false; sparkle(it.x, it.z); sparkle(it.x, it.z);
         if ((v.tv | 0) < TV_MAX) v.tv = (v.tv | 0) + 1;
+        if (v.isLocal) window.__tvPick = (window.__tvPick | 0) + 1;
         if (v.isLocal) { tone(1175, 0.08, 'triangle', 0.07); tone(1568, 0.1, 'triangle', 0.06, null, 0.06); if (v.tv >= TV_MAX) { toast('🚀 5 TV-Verträge – RAKETE bereit!', 1800); sfx.pickup(); } updateTvHud(); }
         break;
       }
@@ -3146,6 +3161,7 @@ click('prevTruck', () => changeTruck(-1)); click('nextTruck', () => changeTruck(
 }
 click('btnSolo', () => { goFullscreen(); startSolo(); });
 click('btnMulti', () => { goFullscreen(); enterLobby(); });
+{ const bl = $('buildLabel'), hb = (document.querySelector('meta[name=rf1-build]') || {}).content; if (bl) bl.textContent = 'Version ' + BUILD + (hb && hb !== BUILD ? ' · ⚠️ bitte neu laden' : ''); window.__build = BUILD; }
 click('btnStartMp', () => { goFullscreen(); hostStart(); });
 click('btnLeave', async () => { await Net.leave(); showScreen('scr-select'); });
 window.__openLobby = OPEN_LOBBY;
