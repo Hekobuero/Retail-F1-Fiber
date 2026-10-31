@@ -1036,10 +1036,10 @@ function miniXY(x, z) { return [mini.offX + (x - mini.ox) * mini.scale, mini.off
 const MASTER_VOL = 0.45;
 const audio = { ctx: null, master: null, sfxBus: null, muted: ls.get('rf1_muted', '0') === '1', eng: null, squeal: null, unlocked: false };
 const ENGINE_CLASSES = {
-  diesel: { t1: 'sawtooth', t2: 'square', base: 34, mul: 2.3, sub: 0.5, lp: 520, vol: 0.075 },
-  boxer: { t1: 'square', t2: 'triangle', base: 42, mul: 3.0, sub: 0.5, lp: 700, vol: 0.06 },
-  v8: { t1: 'sawtooth', t2: 'sawtooth', base: 46, mul: 3.6, sub: 0.502, lp: 1100, vol: 0.07 },
-  twostroke: { t1: 'square', t2: 'sawtooth', base: 70, mul: 5.0, sub: 1.01, lp: 2200, vol: 0.05 }
+  diesel: { t1: 'sawtooth', t2: 'triangle', base: 34, mul: 2.3, sub: 0.5, lp: 420, vol: 0.04 },
+  boxer: { t1: 'triangle', t2: 'square', base: 42, mul: 3.0, sub: 0.5, lp: 520, vol: 0.035 },
+  v8: { t1: 'sawtooth', t2: 'triangle', base: 46, mul: 3.6, sub: 0.502, lp: 700, vol: 0.04 },
+  twostroke: { t1: 'square', t2: 'triangle', base: 70, mul: 5.0, sub: 1.01, lp: 1300, vol: 0.028 }
 };
 function noiseBuffer(sec) {
   const a = audio.ctx, n = Math.floor(a.sampleRate * sec), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
@@ -1057,7 +1057,7 @@ function ensureAudio() {
       audio.noise = noiseBuffer(2);
       // Motor: 2 Oszillatoren + Tiefpass
       const o1 = a.createOscillator(), o2 = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
-      f.type = 'lowpass'; f.Q.value = 2; g.gain.value = 0;
+      f.type = 'lowpass'; f.Q.value = 0.7; g.gain.value = 0;
       o1.connect(f); o2.connect(f); f.connect(g); g.connect(audio.master); o1.start(); o2.start();
       audio.eng = { o1, o2, f, g, cls: null };
       setEngineClass('diesel');
@@ -1084,8 +1084,9 @@ function updateEngineAudio(speed, steer, active, spin) {
   const gear = Math.min(4, Math.floor(sp / 13)), rpm = (sp - gear * 13) / 13 * 0.6 + gear * 0.22;
   const f = c.base + (rpm * 40 + sp * 0.9) * c.mul * 0.45;
   e.o1.frequency.setTargetAtTime(f, t, 0.06); e.o2.frequency.setTargetAtTime(f * c.sub, t, 0.06);
-  e.g.gain.setTargetAtTime(active ? c.vol + sp * 0.0012 : 0, t, 0.12);
-  e.f.frequency.setTargetAtTime(c.lp + sp * 18, t, 0.1);
+  // leiser & weicher: Lautstärke steigt nur sanft, Filter öffnet begrenzt (keine harten Höhen bei hoher Drehzahl)
+  e.g.gain.setTargetAtTime(active ? c.vol + Math.min(sp, 45) * 0.0004 : 0, t, 0.15);
+  e.f.frequency.setTargetAtTime(Math.min(c.lp + sp * 9, c.lp * 2.2), t, 0.12);
   const sq = active && (spin || (Math.abs(steer) > 0.7 && sp > 20)) ? (spin ? 0.12 : 0.05 + (Math.abs(steer) - 0.7) * 0.2) : 0;
   audio.squeal.g.gain.setTargetAtTime(sq, t, 0.05);
   audio.squeal.bp.frequency.setTargetAtTime(2300 + sp * 12, t, 0.1);
@@ -1125,7 +1126,7 @@ const sfx = {
   finish() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, i === 5 ? 0.7 : 0.17, 'square', 0.09, null, i * 0.14)); [262, 330, 392].forEach(f => tone(f, 1.2, 'triangle', 0.05, null, 0.7)); },
   dsq() { [392, 370, 349].forEach((f, i) => tone(f, 0.42, 'sawtooth', 0.09, null, i * 0.45)); tone(330, 1.1, 'sawtooth', 0.09, 300, 1.35, 9); }
 };
-function setMute(m) { audio.muted = m; ls.set('rf1_muted', m ? '1' : '0'); if (audio.master) audio.master.gain.value = m ? 0 : MASTER_VOL; $('btnMute').textContent = m ? '🔇' : '🔊'; }
+function setMute(m) { audio.muted = m; ls.set('rf1_muted', m ? '1' : '0'); if (audio.master) audio.master.gain.value = m ? 0 : MASTER_VOL; $('btnMute').textContent = m ? '🔇' : '🔊'; if (m && window.speechSynthesis) try { speechSynthesis.cancel(); } catch (e) {} }
 
 /* =====================================================================
    FAHRZEUGE
@@ -1452,7 +1453,7 @@ function startSolo() {
 }
 function beginCountdown(ms) {
   race.active = true; race.state = 'countdown'; race.goAt = performance.now() + ms; race.time = 0; race.cdShown = -1;
-  normanNext = 0; setEngineClass(race.me ? race.me.variant.snd : 'diesel'); updateBlitzHud();
+  Radio.next = performance.now() + 15000; Radio.pending = false; normanNext = 0; setEngineClass(race.me ? race.me.variant.snd : 'diesel'); updateBlitzHud();
   for (const v of race.vehicles) { v.lapStart = 0; }
   snapCamera(); updateItemHud();
   showScreen(null); $('hud').classList.remove('hidden'); if (isTouch || PARAMS.has('touchui')) $('touch').classList.remove('hidden');
@@ -1486,6 +1487,23 @@ function showResults() {
   showScreen('scr-result');
   $('touch').classList.add('hidden'); resetTouch();
   $('btnAgain').textContent = race.mp ? '👥 ZUR LOBBY' : '🔁 NOCHMAL';
+  if (race.mp) scheduleLobbyReturn();
+}
+// Multiplayer: nach dem Rennen automatisch zurück in die Lobby –
+// sobald alle im Ziel/DSQ/ausgestiegen sind (mind. 6 s Ergebnis), spätestens nach 25 s
+let lobbyReturnTimer = 0;
+function scheduleLobbyReturn() {
+  clearInterval(lobbyReturnTimer);
+  const rid = race.rid, t0 = performance.now();
+  const tick = () => {
+    if (!race.active || !race.mp || race.rid !== rid || curScreen !== 'scr-result') { clearInterval(lobbyReturnTimer); $('resAuto').textContent = ''; return; }
+    const el = (performance.now() - t0) / 1000;
+    const allDone = race.vehicles.every(v => v.finished || v.dsq || v.left);
+    const left = Math.ceil(allDone ? Math.max(0, 6 - el) : Math.max(0, 25 - el));
+    $('resAuto').textContent = allDone ? 'Zurück zur Lobby in ' + left + ' s …' : 'Warte auf die anderen Fahrer … (Lobby in ' + left + ' s)';
+    if (left <= 0) { clearInterval(lobbyReturnTimer); $('resAuto').textContent = ''; quitRace(); }
+  };
+  tick(); lobbyReturnTimer = setInterval(tick, 500);
 }
 function renderResults() {
   const order = racingOrder();
@@ -1493,7 +1511,7 @@ function renderResults() {
   const pos = order.indexOf(me) + 1;
   $('resTitle').textContent = me && me.dsq ? '🚫 DISQUALIFIZIERT' : me && me.finished ? (pos === 1 ? '🏆 SIEG!' : 'PLATZ ' + pos) : 'ERGEBNIS';
   $('resSub').textContent = (me && isFinite(me.best) ? 'Beste Runde: ' + fmtTime(me.best) + ' · ' : '') + (race.mp ? 'Multiplayer-Rennen' : 'Solo gegen KI');
-  const rows = order.map((v, k) => `<tr class="${v.isLocal ? 'me' : ''}${v.dsq ? ' dsq' : ''}"><td>${v.dsq ? '–' : (k + 1) + '.'}</td><td>${escapeHtml(v.name)}${v.isAI ? ' <small>🤖</small>' : ''}${v.strikes && !v.dsq ? ' <small>📸' + v.strikes + '</small>' : ''}</td><td class="t">${v.dsq ? 'DSQ (3x geblitzt)' : v.finished ? fmtTime(v.finishTime) : 'unterwegs… R' + Math.max(1, Math.min(LAPS, v.lap))}</td></tr>`);
+  const rows = order.map((v, k) => `<tr class="${v.isLocal ? 'me' : ''}${v.dsq ? ' dsq' : ''}"><td>${v.dsq ? '–' : (k + 1) + '.'}</td><td>${escapeHtml(v.name)}${v.isAI ? ' <small>🤖</small>' : ''}${v.strikes && !v.dsq ? ' <small>📸' + v.strikes + '</small>' : ''}</td><td class="t">${v.dsq ? 'DSQ (' + BLITZ_MAX + 'x geblitzt)' : v.finished ? fmtTime(v.finishTime) : 'unterwegs… R' + Math.max(1, Math.min(LAPS, v.lap))}</td></tr>`);
   for (const v of race.vehicles.filter(v => v.left)) rows.push(`<tr><td>–</td><td>${escapeHtml(v.name)}</td><td class="t">ausgestiegen</td></tr>`);
   $('resTable').innerHTML = rows.join('');
 }
@@ -1567,6 +1585,7 @@ function stepRace(dt) {
   if (hornCD > 0) hornCD -= dt;
   // Norman ruft an (ab 150 km/h, höchstens alle 15 s)
   if (me && !me.out && Math.abs(me.speed) * 3.6 >= 150 && now > normanNext) { showNorman(); normanNext = now + 18000; }
+  checkPoliceRadio(now);
   // Item-Boxen
   for (const it of world.items) {
     if (it.respawn > 0) { it.respawn -= dt; if (it.respawn <= 0) it.mesh.visible = true; else continue; }
@@ -1710,38 +1729,41 @@ function flashBlitzer() {
   const bz = world.blitz; if (!bz) return;
   bz.flashM.color.setHex(0xffffff); setTimeout(() => bz.flashM.color.setHex(0x552222), 160);
 }
+const BLITZ_MAX = 2; // Disqualifikation nach 2x geblitzt
 function onBlitz(v) {
   v.strikes++;
   flashBlitzer();
   if (v.isLocal) {
     sfx.blitz();
     const f = $('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
-    toast('📸 GEBLITZT! (' + v.strikes + '/3)', 2000); updateBlitzHud();
+    toast('📸 GEBLITZT! (' + v.strikes + '/' + BLITZ_MAX + ')', 2000); updateBlitzHud();
     if (race.mp) Net.send('bl', { i: v.id, n: v.strikes });
   } else if (distToLocal(v) < 90) sfx.blitz();
-  if (v.strikes >= 3) disqualify(v);
+  if (v.strikes >= BLITZ_MAX) disqualify(v);
 }
 function disqualify(v) {
   if (v.dsq) return;
-  v.dsq = true; v.dsqT = 0; v.strikes = Math.max(3, v.strikes);
+  v.dsq = true; v.dsqT = 0; v.strikes = Math.max(BLITZ_MAX, v.strikes);
   if (v.isLocal) {
-    sfx.dsq(); toast('🚫 Disqualifiziert – 3x geblitzt!', 3200); updateBlitzHud();
+    sfx.dsq(); toast('🚫 Disqualifiziert – ' + BLITZ_MAX + 'x geblitzt!', 3200); updateBlitzHud();
     reportOwnResult(false);
     if (race.mp) Net.send('dsq', { i: v.id, n: v.name });
     setTimeout(() => { if (race.active && race.me === v) showResults(); }, 2600);
-  } else toast('🚫 ' + v.name + ' disqualifiziert – 3x geblitzt!', 2000);
+  } else toast('🚫 ' + v.name + ' disqualifiziert – ' + BLITZ_MAX + 'x geblitzt!', 2000);
   if (resultShown) renderResults();
 }
 function updateBlitzHud() {
   const me = race.me, n = me ? me.strikes : 0;
-  const el = $('hudBlitz'); el.textContent = '📸 ' + n + '/3'; el.classList.toggle('warn', n >= 2);
+  const el = $('hudBlitz'); el.textContent = '📸 ' + n + '/' + BLITZ_MAX; el.classList.toggle('warn', n >= BLITZ_MAX - 1);
 }
 function showNorman() {
+  if (Radio.active) { normanQueued = true; return; }   // nicht über den Polizeifunk
+  duckMusic(3.6);
   const el = $('norman');
   el.classList.remove('hidden'); void el.offsetWidth; el.classList.add('show');
   sfx.ring(); window.__norman = (window.__norman || 0) + 1;
   clearTimeout(normanTimer);
-  normanTimer = setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.classList.add('hidden'), 500); }, 3200);
+  normanTimer = setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.classList.add('hidden'); if (Radio.pending) policeRadio(); }, 500); }, 3200);
 }
 
 /* =====================================================================
@@ -2290,9 +2312,193 @@ function addHeadlights(root, body) {
 }
 
 /* =====================================================================
+   MUSIK (eigene Chiptune-Komposition, prozedural) + POLIZEIFUNK
+   ===================================================================== */
+const MUSIC_VOL = 0.17;
+const music = { on: ls.get('rf1_music', '1') !== '0', bus: null, theme: null, step: 0, next: 0, timer: 0, pulse: null, duckUntil: 0 };
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+// Rennen: C-Dur, 150 BPM, 8 Takte (A: C G Am F · B: F G C G)
+const THEMES = {
+  race: {
+    bpm: 150,
+    chords: [[60, 64, 67], [59, 62, 67], [57, 60, 64], [57, 60, 65], [57, 60, 65], [59, 62, 67], [60, 64, 67], [59, 62, 67]],
+    bass: [48, 43, 45, 41, 41, 43, 48, 43],
+    lead: [
+      [[0, 72, 2], [2, 76, 2], [4, 79, 3], [8, 76, 1], [9, 77, 1], [10, 79, 2], [12, 84, 4]],
+      [[0, 83, 2], [2, 79, 2], [4, 74, 2], [6, 79, 2], [8, 81, 3], [12, 79, 4]],
+      [[0, 76, 2], [2, 72, 2], [4, 69, 2], [6, 72, 1], [7, 74, 1], [8, 76, 4], [12, 74, 2], [14, 72, 2]],
+      [[0, 72, 3], [4, 69, 2], [6, 72, 2], [8, 77, 3], [12, 76, 2], [14, 74, 2]],
+      [[0, 77, 2], [2, 81, 2], [4, 84, 4], [8, 81, 2], [10, 77, 2], [12, 81, 4]],
+      [[0, 79, 2], [2, 83, 2], [4, 86, 4], [8, 83, 2], [10, 79, 2], [12, 74, 4]],
+      [[0, 76, 1], [1, 77, 1], [2, 79, 2], [4, 84, 2], [6, 79, 2], [8, 76, 2], [10, 79, 2], [12, 72, 4]],
+      [[0, 74, 2], [2, 79, 2], [4, 83, 2], [6, 86, 2], [8, 84, 6], [14, 83, 2]]
+    ],
+    leadWave: 'pulse', drums: 'race'
+  },
+  // Menü: F-Dur, 108 BPM, gemütlicher (F C Dm Bb)
+  menu: {
+    bpm: 108,
+    chords: [[65, 69, 72], [64, 67, 72], [62, 65, 69], [62, 65, 70]],
+    bass: [41, 36, 38, 34],
+    lead: [
+      [[0, 69, 4], [4, 72, 4], [8, 77, 6], [14, 76, 2]],
+      [[0, 74, 4], [4, 72, 4], [8, 67, 8]],
+      [[0, 69, 2], [2, 70, 2], [4, 72, 4], [8, 74, 4], [12, 72, 4]],
+      [[0, 70, 4], [4, 69, 4], [8, 65, 8]]
+    ],
+    leadWave: 'triangle', drums: 'soft'
+  }
+};
+function musicInit() {
+  const a = audio.ctx; if (!a || music.bus) return;
+  music.bus = a.createGain(); music.bus.gain.value = music.on ? MUSIC_VOL : 0; music.bus.connect(audio.master);
+  // 25-%-Pulswelle (typischer Chiptune-Klang)
+  const n = 32, re = new Float32Array(n), im = new Float32Array(n);
+  for (let k = 1; k < n; k++) im[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * 0.25);
+  music.pulse = a.createPeriodicWave(re, im);
+  music.timer = setInterval(musicTick, 40);
+}
+function mNote(f, t, dur, type, vol, dest) {
+  const a = audio.ctx, o = a.createOscillator(), g = a.createGain();
+  if (type === 'pulse') o.setPeriodicWave(music.pulse); else o.type = type;
+  o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+  g.gain.setValueAtTime(vol, t + Math.max(0.01, dur - 0.04)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(dest || music.bus); o.start(t); o.stop(t + dur + 0.02);
+}
+function mNoise(t, dur, vol, type, freq) {
+  const a = audio.ctx, s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  s.buffer = audio.noise; f.type = type; f.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(music.bus); s.start(t, Math.random()); s.stop(t + dur + 0.02);
+}
+function mKick(t, vol) { const a = audio.ctx, o = a.createOscillator(), g = a.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16); o.connect(g); g.connect(music.bus); o.start(t); o.stop(t + 0.2); }
+function musicTick() {
+  const a = audio.ctx; if (!a || !music.bus || a.state !== 'running') return;
+  const want = music.on && !audio.muted ? music.theme : null;
+  if (!want) { music.next = 0; return; }
+  const th = THEMES[want], sd = 60 / th.bpm / 4, bars = th.chords.length;
+  if (!music.next || music.next < a.currentTime - 0.2) { music.next = a.currentTime + 0.06; music.step = 0; }
+  while (music.next < a.currentTime + 0.18) {
+    const t = music.next, s = music.step % (bars * 16), bar = Math.floor(s / 16), st = s % 16;
+    for (const [p, m, len] of th.lead[bar]) if (p === st) mNote(mtof(m), t, len * sd * 0.95, th.leadWave === 'pulse' ? 'pulse' : 'triangle', th.leadWave === 'pulse' ? 0.11 : 0.16);
+    // Bass: Achtel, Grundton / Oktave, Quinte auf Zählzeit 4
+    if (st % 2 === 0) { const r = th.bass[bar], m = st === 12 ? r + 7 : (st % 4 === 2 ? r + 12 : r); mNote(mtof(m), t, sd * 1.7, 'triangle', 0.2); }
+    // Akkord-Stakkato auf den Offbeats
+    if (st % 4 === 2) for (const m of th.chords[bar]) mNote(mtof(m), t, sd * 0.8, 'square', th.drums === 'race' ? 0.018 : 0.012);
+    // Schlagzeug
+    if (th.drums === 'race') {
+      if (st === 0 || st === 8 || (st === 10 && bar % 2)) mKick(t, 0.32);
+      if (st === 4 || st === 12) mNoise(t, 0.12, 0.16, 'bandpass', 1800);
+      if (st % 2 === 0) mNoise(t, 0.03, 0.05, 'highpass', 7000);
+    } else {
+      if (st === 0 || st === 8) mKick(t, 0.18);
+      if (st === 4 || st === 12) mNoise(t, 0.05, 0.05, 'highpass', 6000);
+    }
+    music.next += sd; music.step++;
+  }
+}
+function updateMusic() {
+  if (!audio.ctx) return; musicInit();
+  music.theme = race.active && race.state !== 'idle' && curScreen !== 'scr-result' ? 'race' : 'menu';
+  // Ducking unter Popups (Norman, Polizeifunk)
+  const t = audio.ctx.currentTime, ducked = performance.now() < music.duckUntil;
+  const target = music.on && !audio.muted ? MUSIC_VOL * (ducked ? 0.3 : 1) : 0;
+  if (Math.abs(music.bus.gain.value - target) > 0.002) music.bus.gain.setTargetAtTime(target, t, 0.15);
+}
+function duckMusic(sec) { music.duckUntil = Math.max(music.duckUntil, performance.now() + sec * 1000); }
+function setMusic(on) {
+  music.on = on; ls.set('rf1_music', on ? '1' : '0');
+  for (const id of ['btnMusic', 'btnMusicMenu']) { const b = $(id); if (b) { b.textContent = on ? '🎵' : '🎵̸'; b.classList.toggle('off', !on); } }
+  updateMusic();
+}
+
+// ---------------- Polizeifunk ----------------
+const RADIO_LINES = [
+  'Einheit 12 an Zentrale, wir haben ein illegales Fiber-Truck-Rennen!',
+  'Zentrale an alle Einheiten: magentafarbene Transporter mit überhöhter Geschwindigkeit!',
+  'Einheit 7 hier, die verlegen da Glasfaser mit 140 Sachen!',
+  'Hier Einheit 12, ein Trabi hat uns gerade überholt…',
+  'Zentrale, wir brauchen Verstärkung, die haben HA-Only-Verträge dabei!'
+];
+const Radio = { active: false, pending: false, next: 0, fastSince: 0, idx: Math.floor(Math.random() * RADIO_LINES.length), timer: 0, static: null, voice: null };
+function radioStatic(on) {
+  const a = audio.ctx; if (!a) return;
+  if (on && !Radio.static) {
+    const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(), lfo = a.createOscillator(), lg = a.createGain();
+    s.buffer = audio.noise; s.loop = true; f.type = 'bandpass'; f.frequency.value = 1700; f.Q.value = 1.4; g.gain.value = 0.035;
+    lfo.frequency.value = 9; lg.gain.value = 0.02; lfo.connect(lg); lg.connect(g.gain); // knisterndes Pumpen
+    s.connect(f); f.connect(g); g.connect(audio.master); s.start(); lfo.start();
+    Radio.static = { s, lfo, g };
+  } else if (!on && Radio.static) {
+    const st = Radio.static; Radio.static = null;
+    try { st.g.gain.setTargetAtTime(0, a.currentTime, 0.05); st.s.stop(a.currentTime + 0.3); st.lfo.stop(a.currentTime + 0.3); } catch (e) {}
+  }
+}
+function squelch(delay = 0) { noise(0.16, 0.22, 2600, 900, 'bandpass', delay, 2); tone(1250, 0.09, 'square', 0.05, null, delay + 0.14); }
+function pickGermanVoice() {
+  if (Radio.voice || !window.speechSynthesis) return Radio.voice;
+  const vs = speechSynthesis.getVoices() || [];
+  Radio.voice = vs.find(v => /^de(-|_)DE/i.test(v.lang)) || vs.find(v => /^de/i.test(v.lang)) || null;
+  return Radio.voice;
+}
+if (window.speechSynthesis) { try { speechSynthesis.onvoiceschanged = () => { Radio.voice = null; pickGermanVoice(); }; } catch (e) {} }
+function normanShowing() { const n = $('norman'); return n && n.classList.contains('show'); }
+function policeRadio(force) {
+  if (Radio.active) return false;
+  if (normanShowing()) { Radio.pending = true; return false; }   // nicht über Norman – danach abspielen
+  Radio.active = true; Radio.pending = false;
+  const line = RADIO_LINES[Radio.idx++ % RADIO_LINES.length];
+  const unit = (line.match(/Einheit (\d+)/) || [])[1];
+  const el = $('radio');
+  $('radioFrom').textContent = unit ? 'Einheit ' + unit : 'Zentrale';
+  $('radioMsg').textContent = '„' + line + '“';
+  el.classList.remove('hidden'); void el.offsetWidth; el.classList.add('show');
+  window.__radio = (window.__radio || 0) + 1; (window.__radioLog = window.__radioLog || []).push(line);
+  const est = 1.2 + line.length * 0.065;
+  duckMusic(est + 1.2);
+  squelch(); radioStatic(true);
+  let ended = false;
+  const end = () => {
+    if (ended) return; ended = true;
+    radioStatic(false); squelch(0.02);
+    clearTimeout(Radio.timer);
+    Radio.timer = setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.classList.add('hidden'); Radio.active = false; if (normanQueued) { normanQueued = false; showNorman(); } }, 450); }, 600);
+  };
+  // Sprachausgabe (de-DE) – sie lässt sich nicht filtern, daher Rauschen + Squelch drumherum
+  if (window.speechSynthesis && !audio.muted) {
+    try {
+      const u = new SpeechSynthesisUtterance(line); u.lang = 'de-DE'; const v = pickGermanVoice(); if (v) u.voice = v;
+      u.rate = 1.08; u.pitch = 0.75; u.volume = 0.9;
+      u.onend = () => setTimeout(end, 150); u.onerror = () => {};
+      setTimeout(() => { try { speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {} }, 380);
+    } catch (e) {}
+  }
+  setTimeout(end, est * 1000 + 900); // Sicherheitsnetz (oder ohne Sprachausgabe: Untertitel-Dauer)
+  return true;
+}
+// alle 0,5 s prüfen: ≥ 4 Fahrer gleichzeitig über 130 km/h → ab und zu Funkspruch (Abklingzeit ~45 s)
+let radioCheckT = 0;
+function checkPoliceRadio(now) {
+  if (now - radioCheckT < 500) return; radioCheckT = now;
+  if (Radio.pending && !normanShowing() && !Radio.active) { policeRadio(); return; }
+  if (race.state !== 'run' || Radio.active || now < Radio.next) return;
+  const fast = race.vehicles.filter(v => !v.out && !v.left && Math.abs(v.speed) * 3.6 > 130).length;
+  window.__fastCount = fast;
+  if (fast >= 4) {
+    if (!Radio.fastSince) Radio.fastSince = now;
+    if (now - Radio.fastSince > 1500) {
+      Radio.fastSince = 0;
+      if (Math.random() < 0.65) { if (policeRadio() || Radio.pending) Radio.next = now + 45000; }
+      else Radio.next = now + 12000; // diesmal nicht – später wieder würfeln
+    }
+  } else Radio.fastSince = 0;
+}
+let normanQueued = false;
+
+/* =====================================================================
    MULTIPLAYER (Supabase Realtime: Presence + Broadcast, keine Tabellen)
    ===================================================================== */
-const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const Net = {
   sb: null, ch: null, code: null, me: null, players: [], connected: false, synced: false, syncedAt: 0,
   async lib() {
@@ -2393,7 +2599,7 @@ const Net = {
       if (p.o === this.me.id && t && t.remote && !race.countedHits.has(p.pid)) { race.countedHits.add(p.pid); toast('TREFFER! ' + p.tn + ' hat unterschrieben!'); sfx.hit(); countMyHit(); }
       window.__hits = (window.__hits || 0) + 1;
     } else if (ev === 'bl') {
-      if (v && p.n > v.strikes) { v.strikes = p.n; flashBlitzer(); if (distToLocal(v) < 90) sfx.blitz(); toast('📸 ' + v.name + ' geblitzt! (' + p.n + '/3)', 1400); }
+      if (v && p.n > v.strikes) { v.strikes = p.n; flashBlitzer(); if (distToLocal(v) < 90) sfx.blitz(); toast('📸 ' + v.name + ' geblitzt! (' + p.n + '/' + BLITZ_MAX + ')', 1400); if (p.n >= BLITZ_MAX) disqualify(v); }
     } else if (ev === 'dsq') {
       if (v) disqualify(v);
     } else if (ev === 'fin') {
@@ -2401,36 +2607,60 @@ const Net = {
     }
   }
 };
-function randomCode() { let s = ''; for (let i = 0; i < 4; i++) s += CODE_ABC[Math.floor(Math.random() * CODE_ABC.length)]; return s; }
-async function enterRoom(code) {
+// Es gibt genau EINE offene Lobby (keine Raum-Codes). Nur für automatische Tests (?autodrive) lässt sie sich
+// per ?testlobby=NAME auf einen eigenen Kanal legen, damit Testläufe echte Spieler nicht stören.
+const OPEN_LOBBY = (AUTODRIVE && PARAMS.get('testlobby')) ? 'TEST' + String(PARAMS.get('testlobby')).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) : 'PUBLIC';
+const MAX_MP = 8;
+let joining = false;
+async function enterLobby() {
+  if (joining) return; joining = true;
   ensureAudio();
-  $('mpMsg').textContent = 'Verbinde mit Raum ' + (code === 'PUBLIC' ? '„Schnelles Rennen“' : code) + ' …';
+  toast('Verbinde mit der offenen Lobby …', 1500);
   try {
-    await Net.join(code);
+    await Net.join(OPEN_LOBBY);
     showScreen('scr-lobby'); renderLobby();
   } catch (e) {
-    $('mpMsg').textContent = '⚠️ Verbindung fehlgeschlagen (' + (e.message || e) + '). Internet prüfen und nochmal versuchen.';
+    toast('⚠️ Lobby nicht erreichbar – Internet prüfen und nochmal versuchen.', 3200);
     await Net.leave();
-  }
+  } finally { joining = false; }
+}
+function lobbyView() {
+  const ps = Net.players.slice().sort((a, b) => a.joinedAt - b.joinedAt || (a.id < b.id ? -1 : 1));
+  const hid = Net.hostId();
+  const waiting = ps.filter(p => p.status === 'lobby');
+  const grid = waiting.slice(0, MAX_MP);
+  const racing = ps.filter(p => p.status === 'racing');
+  return { ps, hid, waiting, grid, racing, hostP: ps.find(p => p.id === hid) };
 }
 function renderLobby() {
   if (!Net.me) return;
-  $('lobbyCode').textContent = Net.code === 'PUBLIC' ? 'SCHNELLES RENNEN' : Net.code;
-  $('lobbyHint').textContent = Net.code === 'PUBLIC' ? 'Öffentlicher Raum – jeder kann mitfahren.' : 'Gib diesen Code an deine Freunde weiter!';
-  const hid = Net.hostId();
-  const ps = Net.players.slice().sort((a, b) => a.joinedAt - b.joinedAt);
-  $('lobbyList').innerHTML = ps.map(p => `<li class="${p.id === Net.me.id ? 'me' : ''}">${p.id === hid ? '👑 ' : ''}${escapeHtml(p.name)} <small>${escapeHtml((TRUCKS[p.truck] || TRUCKS[0]).name)}${p.status === 'racing' ? ' · im Rennen 🏁' : ''}</small></li>`).join('');
-  const host = Net.isHost(), hostP = ps.find(p => p.id === hid);
-  const ready = ps.filter(p => p.status === 'lobby').length;
-  $('btnStartMp').classList.toggle('hidden', !host);
-  if (!Net.hostReady()) { $('lobbyStatus').textContent = 'Synchronisiere Lobby …'; return; }
-  $('btnStartMp').textContent = ready > 1 ? '🏁 RENNEN STARTEN (' + Math.min(8, ready) + ')' : '🏁 ALLEINE STARTEN';
-  $('lobbyStatus').textContent = host ? (ready > 1 ? 'Du bist Host – starte, wenn alle da sind.' : 'Warte auf Mitspieler … oder starte schon mal.')
-    : (hostP && hostP.status === 'racing' ? 'Ein Rennen läuft gerade – du bist beim nächsten dabei.' : 'Warte, bis der Host 👑 das Rennen startet …');
+  const L = lobbyView(), me = Net.me;
+  $('lobbyCount').textContent = L.ps.length + ' / ' + MAX_MP;
+  const inGrid = new Set(L.grid.map(p => p.id));
+  $('lobbyList').innerHTML = L.ps.map(p => {
+    const tag = p.status === 'racing' ? ' · im Rennen 🏁' : (p.status === 'lobby' && !inGrid.has(p.id) ? ' · wartet (voll)' : '');
+    return `<li class="${p.id === me.id ? 'me' : ''}${p.id === L.hid ? ' host' : ''}">${p.id === L.hid ? '👑 ' : ''}${escapeHtml(p.name)}${p.id === me.id ? ' <b>(du)</b>' : ''} <small>${escapeHtml((TRUCKS[p.truck] || TRUCKS[0]).name)}${tag}</small></li>`;
+  }).join('');
+  const host = Net.isHost(), btn = $('btnStartMp');
+  btn.classList.toggle('hidden', !host);
+  if (!Net.hostReady()) { $('lobbyStatus').textContent = 'Synchronisiere Lobby …'; btn.disabled = true; return; }
+  const n = L.grid.length;
+  btn.disabled = n < 2;
+  btn.textContent = n >= 2 ? '🏁 RENNEN STARTEN (' + n + (n === 2 ? ' · 1vs1' : '') + ')' : '⏳ Warte auf Mitspieler…';
+  const meWaitingFull = me.status === 'lobby' && !inGrid.has(me.id);
+  let msg;
+  if (meWaitingFull) msg = 'Lobby voll – Rennen läuft/voll. Du bist dabei, sobald ein Platz frei ist.';
+  else if (L.racing.length && !L.racing.some(p => p.id === me.id)) msg = host ? 'Rennen läuft noch (' + L.racing.length + ' im Rennen) – du kannst mit den Wartenden starten oder kurz warten.' : 'Rennen läuft – du bist beim nächsten dabei.';
+  else if (host) msg = n >= 2 ? 'Du bist Host 👑 – starte, wenn alle da sind.' : 'Warte auf Mitspieler… (ab 2 Spielern geht’s los)';
+  else msg = 'Warte, bis ' + (L.hostP ? L.hostP.name : 'der Host') + ' 👑 das Rennen startet …';
+  $('lobbyStatus').textContent = msg;
+  window.__lobby = { n: L.ps.length, grid: n, host, hostId: L.hid, racing: L.racing.length, msg, startEnabled: host && !btn.disabled };
 }
 function hostStart() {
-  if (!Net.isHost()) return;
-  const grid = Net.players.filter(p => p.status === 'lobby').sort((a, b) => a.joinedAt - b.joinedAt).slice(0, 8).map(p => ({ id: p.id, n: p.name, v: p.truck }));
+  if (!Net.isHost() || !Net.hostReady()) return;
+  const L = lobbyView();
+  if (L.grid.length < 2) { renderLobby(); return; }   // ab 1vs1
+  const grid = L.grid.map(p => ({ id: p.id, n: p.name, v: p.truck }));
   const payload = { rid: 'r' + uid(), grid, cd: 4000, laps: LAPS, h: Net.me.id, hj: Net.me.joinedAt };
   Net.send('start', payload);
   startMp(payload);
@@ -2504,22 +2734,15 @@ click('prevTruck', () => changeTruck(-1)); click('nextTruck', () => changeTruck(
   $('scr-select').addEventListener('pointerup', e => { if (e.target.closest('button') || sx === null || sid !== e.pointerId) return; const d = e.clientX - sx; if (Math.abs(d) > 40) changeTruck(d < 0 ? 1 : -1); sx = null; });
 }
 click('btnSolo', () => { goFullscreen(); startSolo(); });
-click('btnMulti', () => { $('mpMsg').textContent = ''; showScreen('scr-mp'); });
-click('btnMpBack', () => showScreen('scr-select'));
-click('btnQuick', () => enterRoom('PUBLIC'));
-click('btnCreate', () => enterRoom(randomCode()));
-click('btnJoin', () => {
-  const c = ($('codeInput').value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
-  if (c.length !== 4) { $('mpMsg').textContent = 'Bitte einen 4-stelligen Raum-Code eingeben.'; return; }
-  enterRoom(c);
-});
-$('codeInput').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); });
+click('btnMulti', () => { goFullscreen(); enterLobby(); });
 click('btnStartMp', () => { goFullscreen(); hostStart(); });
 click('btnLeave', async () => { await Net.leave(); showScreen('scr-select'); });
+window.__openLobby = OPEN_LOBBY;
 click('btnPause', () => { if (!race.active) return; paused = !race.mp; showScreen('scr-pause'); $('touch').classList.add('hidden'); resetTouch(); });
 click('btnResume', () => { paused = false; showScreen(null); if (isTouch || PARAMS.has('touchui')) $('touch').classList.remove('hidden'); lastT = performance.now(); });
 click('btnQuit', () => { paused = false; quitRace(); });
 click('btnMute', () => setMute(!audio.muted));
+click('btnMusic', () => setMusic(!music.on)); click('btnMusicMenu', () => setMusic(!music.on)); setMusic(music.on);
 click('btnAgain', () => { if (race.mp) quitRace(); else startSolo(); });
 click('btnMenu', async () => { const mp = race.mp; await quitRace(); if (mp) { await Net.leave(); } showScreen('scr-select'); });
 click('rotOk', () => { rotateDismissed = true; checkRotate(); });
@@ -2533,6 +2756,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) doFire(); }
   if (e.code === 'Escape' || e.code === 'KeyP') { if (race.active && curScreen === null) $('btnPause').click(); else if (curScreen === 'scr-pause') $('btnResume').click(); }
   if (e.code === 'KeyM') setMute(!audio.muted);
+  if (e.code === 'KeyN') setMusic(!music.on);
   if (e.code === 'KeyH' && race.active && !e.repeat) sfx.horn();
   if (curScreen === 'scr-select') { if (e.code === 'ArrowLeft') changeTruck(-1); if (e.code === 'ArrowRight') changeTruck(1); if (e.code === 'Enter') { startSolo(); } }
   ensureAudio();
@@ -2609,9 +2833,11 @@ function frame(now) {
     if (n === 5) acc = 0;
     updateParts(dt); updateCamera(dt); updateHud();
     if (race.me) updateEngineAudio(race.me.speed, race.me.steer, (race.state === 'run' || race.state === 'countdown') && !race.me.dsq, race.me.spinT > 0);
+    updateMusic();
     updateSky(); renderer.render(scene, camera); window.__drawCalls = renderer.info.render.calls + '/' + renderer.info.render.triangles;
   } else {
     updateEngineAudio(0, 0, false, false);
+    updateMusic();
     if (garageTurn) garageTurn.rotation.y += dt * 0.55;
     // Kamera so, dass der Truck links/mittig sichtbar ist
     const asp = garageCam.aspect;
@@ -2645,6 +2871,7 @@ window.__rf1 = {
   placeAt(frac, lat = 0) { const me = race.me; if (!me) return false; const i = frac === 'heko' ? ((window.__hekoTower ? window.__hekoTower.i : 300) - 120 + track.N) % track.N : frac === 'over' ? ((window.__overpass || 200) - 24 + track.N) % track.N : Math.floor(track.N * frac) % track.N; me.place(i, lat); me.updateProgress(true); snapCamera(); return { i, x: me.x, z: me.z, city: isCity(me.x, me.z) }; },
   towerView(back = 110, fromFrac = null, y = 4) { const t = window.__hekoTower; if (!t) return null; const i = fromFrac != null ? Math.floor(track.N * fromFrac) : (t.i - back + track.N) % track.N, p = track.pts[i]; window.__camOverride = [p.x, y, p.z, t.x, t.h * 0.75, t.z]; return { i, d: Math.round(Math.hypot(p.x - t.x, p.z - t.z)) }; },
   camFree() { window.__camOverride = null; },
+  radio() { return policeRadio(true); }, norman() { showNorman(); }, music() { return { on: music.on, theme: music.theme, step: music.step, ctx: audio.ctx && audio.ctx.state }; },
   tod() { return window.__tod; }, setHour(h) { return window.__setHour(h); },
   giveAmmo(n = 3) { if (race.me) { race.me.ammo = n; updateItemHud(); } },
   fire() { doFire(); },

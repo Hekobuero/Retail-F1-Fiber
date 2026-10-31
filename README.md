@@ -45,8 +45,8 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
   - Es klingelt, das Fenster bleibt ca. 3 s und meldet sich höchstens alle ~18 s.
 - **Blitzer (Starenkasten):**
   - Er steht auf der längsten Geraden, ein Schild „120“ warnt vorher.
-  - Wer schneller als 120 km/h vorbeifährt, wird geblitzt: weißer Blitz, Kamera-Klick und „GEBLITZT! (1/3)“. Das zählt höchstens einmal pro Runde.
-  - Bei **3x geblitzt** ist man **disqualifiziert**: Das Fahrzeug bleibt stehen und verschwindet, in der Ergebnisliste steht „DSQ (3x geblitzt)“.
+  - Wer schneller als 120 km/h vorbeifährt, wird geblitzt: weißer Blitz, Kamera-Klick und „GEBLITZT! (1/2)“. Das zählt höchstens einmal pro Runde.
+  - Bei **2x geblitzt** ist man **disqualifiziert**: Das Fahrzeug bleibt stehen und verschwindet, in der Ergebnisliste steht „DSQ (2x geblitzt)“.
   - Das gilt auch für die KI, die meistens bremst, aber nicht immer.
 - **Waffe „HA-Only Vertrag“:**
   - Einsammeln an den **?-Boxen** (Start mit 1, maximal 3).
@@ -55,15 +55,27 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
 - **Solo-Modus** gegen 6 KI-Gegner mit zufälligen Fahrzeugen. Die KI schießt, weicht aus und bremst meistens vor dem Blitzer.
   - Die Zahl der Gegner lässt sich mit `?ai=0…7` ändern.
 - **Multiplayer** für **bis zu 8 Spieler** über Supabase Realtime (Broadcast + Presence, **ohne Datenbank-Tabellen**):
-  - „Schnelles Rennen“ (öffentlicher Raum), eigenen Raum mit 4-Buchstaben-Code erstellen oder per Code beitreten.
-  - **Host-Wahl:** Host ist, wer laut Server-Presence am frühesten beigetreten ist (bei Gleichstand die kleinere ID). Der Start-Button erscheint erst, wenn die Lobby synchronisiert ist (ca. 1,5 s). Starten zwei Spieler gleichzeitig, gewinnt der Start des älteren Hosts.
-  - Übertragen werden das gewählte Fahrzeug, Positionen (12 Hz, interpoliert), Schüsse und Treffer, Crashs, Blitzer-Strafen, DSQ und der Zieleinlauf.
+  - **Offene Lobby:** Im Menü führt **👥 MULTIPLAYER – OFFENE LOBBY** direkt in eine gemeinsame Lobby. Raum-Codes gibt es nicht. Die Lobby zeigt alle Spieler live mit Name und Fahrzeug.
+  - **Host 👑:** Host ist, wer die Lobby zuerst betreten hat (laut Server-Presence; bei Gleichstand entscheidet die ID). Verlässt der Host die Lobby, übernimmt der Nächstfrühere.
+  - **Start:** Nur der Host sieht **RENNEN STARTEN**. Der Button ist ab 2 Spielern (1vs1) aktiv; allein steht dort „Warte auf Mitspieler…“.
+    - Gestartet wird mit genau den Spielern, die gerade in der Lobby sind (maximal 8).
+    - Wer währenddessen dazukommt, sieht „Rennen läuft – du bist beim nächsten dabei“. Ein 9. Spieler sieht „Lobby voll – Rennen läuft/voll“ und rückt nach.
+  - **Nach dem Rennen** geht es automatisch zurück in die Lobby: 6 s nachdem alle im Ziel, disqualifiziert oder ausgestiegen sind, spätestens nach 25 s. Mit **ZUR LOBBY** geht es sofort.
+  - Übertragen werden das gewählte Fahrzeug, Positionen (5–12 Hz je nach Spielerzahl, interpoliert), Schüsse und Treffer, Crashs, Blitzer-Strafen, DSQ und der Zieleinlauf.
 - **Sound** komplett prozedural per WebAudio, ohne Audiodateien:
-  - Motor mit eigener Klangfarbe je Fahrzeugklasse (Diesel, Van, V8 im BMW, Zweitakt im Trabi); Tonhöhe und Lautstärke folgen dem Tempo, mit „Gangwechseln“.
+  - **Musik:** eigene, fröhliche Chiptune-Komposition im Retro-Kart-Stil, keine Kopie einer echten Melodie. Im Menü läuft ein ruhiges Thema (F-Dur, 108 BPM, Dreieck-Lead), im Rennen ein flottes (C-Dur, 150 BPM, 25-%-Puls-Lead, Bass und leichtes Schlagzeug).
+    - Bei Norman und beim Polizeifunk wird die Musik leiser.
+    - Ein-/Ausschalten mit 🎵 im Menü und im Rennen oder mit Taste **N**; die Einstellung wird gespeichert.
+  - **Polizeifunk:** Fahren mindestens 4 Fahrer (Spieler + KI) gleichzeitig über 130 km/h, kommt ab und zu ein Funkspruch, höchstens etwa alle 45 s.
+    - Dazu gibt es Rauschen und Squelch-Piepser und eine blaue „POLIZEIFUNK“-Box mit Untertitel.
+    - Gesprochen wird per Sprachausgabe des Geräts (de-DE). Die Sprachausgabe lässt sich nicht filtern, deshalb kommen Rauschen und Piepser drumherum.
+    - Mehrere Sprüche wechseln sich ab. Im Multiplayer zählt jedes Gerät selbst anhand der bekannten Tempi.
+    - Funk und Norman überlappen sich nie, der jeweils zweite wartet.
+  - Motor (leise und weich abgemischt, damit die Musik hörbar bleibt) mit eigener Klangfarbe je Fahrzeugklasse (Diesel, Van, V8 im BMW, Zweitakt im Trabi); Tonhöhe und Lautstärke folgen dem Tempo, mit „Gangwechseln“.
   - Reifenquietschen bei starkem Lenken und bei Drehern.
   - Hupe: Taste **H** sowie automatisch bei knappen Überholmanövern.
   - Crash, Papier-Wusch beim Vertragswurf, Treffer, Item-Glockenspiel, Blitzer-Klick, Telefonklingeln (Norman), Countdown, Startton, Runden-Jingle, Sieger-Fanfare und eine traurige Posaune bei DSQ.
-  - Audio wird mit der ersten Berührung freigeschaltet (auch auf iOS). Die Stummschaltung (🔊 / Taste M) gilt für alles; die Gesamtlautstärke wird über einen Kompressor begrenzt.
+  - Audio wird mit der ersten Berührung freigeschaltet (auch auf iOS). Die Stummschaltung (🔊 / Taste M) gilt für alles, auch für Musik und Sprachausgabe; die Gesamtlautstärke wird über einen Kompressor begrenzt.
 - **Name** wird einmal eingegeben und im Browser gespeichert.
 
 ## Bestenlisten 🏆
@@ -108,6 +120,7 @@ Die Flappy-Tabelle `scores` wird nicht angefasst. Solange die Tabelle fehlt, zei
 | Pause | Esc / P |
 | Ton an/aus | M |
 | Hupe | H |
+| Musik an/aus | N (oder 🎵) |
 
 ## Hosting auf GitHub Pages
 1. Den Inhalt dieses Ordners ins Repo pushen, z. B. `Hekobuero/Retail-F1-Fiber`.
@@ -126,7 +139,7 @@ Die Datei `.nojekyll` sorgt dafür, dass GitHub Pages die Dateien unverändert a
 - `screenshot-*.png`: Screenshots aus den automatischen Tests.
 
 ## Konfiguration
-Supabase-URL und der öffentliche *publishable* Key stehen oben in `js/main.js` (`SUPABASE_URL`, `SUPABASE_KEY`). Der Multiplayer nutzt nur Realtime-Channels `rf1f-<CODE>`. In die Datenbank schreibt allein die Bestenlisten-RPC `f1_add_result`; siehe `supabase-setup.sql`.
+Supabase-URL und der öffentliche *publishable* Key stehen oben in `js/main.js` (`SUPABASE_URL`, `SUPABASE_KEY`). Der Multiplayer nutzt nur den Realtime-Channel `rf1f-PUBLIC` (offene Lobby). In die Datenbank schreibt allein die Bestenlisten-RPC `f1_add_result`; siehe `supabase-setup.sql`.
 
 URL-Parameter zum Testen:
 - `?laps=1` setzt die Rundenanzahl (1–9).
@@ -134,6 +147,7 @@ URL-Parameter zum Testen:
 - `?hour=N` erzwingt eine Uhrzeit von 0 bis 24, z. B. `?hour=23` für Nacht.
 - `?touchui` zeigt die Touch-Steuerung (Stick, GAS, FEUER) auch am Desktop.
 - `?ai=0..7` setzt die Zahl der KI-Gegner im Solo-Rennen (Standard 6).
+- `?testlobby=NAME` funktioniert nur zusammen mit `?autodrive` und verlegt die Lobby für automatische Tests auf einen eigenen Kanal, damit echte Spieler nicht gestört werden.
 - `?nostats` meldet keine Ergebnisse. Mit `?autodrive`, `?laps` oder `?ai` wird ohnehin nichts gemeldet, damit Testläufe die Bestenliste nicht verfälschen.
 
 ## Bekannte Einschränkungen

@@ -29,7 +29,7 @@
 
 <!-- Truckauswahl -->
 <section id="scr-select" class="screen hidden">
-  <div class="topbar"><div class="logo small">RETAIL <span>F1</span> FIBER</div><div class="top-r"><button id="btnBoard" class="chip">🏆 BESTENLISTE</button><button id="btnName" class="chip">👤 <span id="nameLbl"></span> ✎</button></div></div>
+  <div class="topbar"><div class="logo small">RETAIL <span>F1</span> FIBER</div><div class="top-r"><button id="btnMusicMenu" class="chip" aria-label="Musik an/aus">🎵</button><button id="btnBoard" class="chip">🏆 BESTENLISTE</button><button id="btnName" class="chip">👤 <span id="nameLbl"></span> ✎</button></div></div>
   <div class="sel-left">
     <div class="sel-title">FAHRZEUG WÄHLEN <b id="truckIdx" class="truck-idx"></b></div>
     <div id="truckName" class="truck-name"></div>
@@ -44,28 +44,15 @@
   <button id="nextTruck" class="arrow right" aria-label="Nächster Truck">▶</button>
   <div class="sel-bottom">
     <button id="btnSolo" class="btn pink big">🏁 SOLO-RENNEN</button>
-    <button id="btnMulti" class="btn white big">👥 MULTIPLAYER</button>
-  </div>
-</section>
-
-<!-- Multiplayer-Menü -->
-<section id="scr-mp" class="screen panel-center hidden">
-  <div class="box">
-    <div class="lbl">MULTIPLAYER</div>
-    <button id="btnQuick" class="btn pink big wide">⚡ SCHNELLES RENNEN</button>
-    <button id="btnCreate" class="btn white big wide">➕ RAUM ERSTELLEN</button>
-    <div class="row"><input id="codeInput" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE"><button id="btnJoin" class="btn pink">BEITRETEN</button></div>
-    <div id="mpMsg" class="hint"></div>
-    <button id="btnMpBack" class="btn ghost">◀ ZURÜCK</button>
+    <button id="btnMulti" class="btn white big">👥 MULTIPLAYER – OFFENE LOBBY</button>
   </div>
 </section>
 
 <!-- Lobby -->
 <section id="scr-lobby" class="screen panel-center hidden">
   <div class="box">
-    <div class="lbl">LOBBY</div>
-    <div class="code-row">RAUM: <b id="lobbyCode">----</b></div>
-    <div id="lobbyHint" class="hint">Teile den Code mit deinen Kolleg:innen!</div>
+    <div class="lobby-head"><div class="lbl" id="lobbyTitle">👥 OFFENE LOBBY</div><span id="lobbyCount" class="chip">0 / 8</span></div>
+    <div id="lobbyHint" class="hint">Jeder, der „Offene Lobby“ wählt, landet hier. Wer zuerst da ist 👑, startet das Rennen – ab 2 Spielern (1vs1).</div>
     <ul id="lobbyList" class="plist"></ul>
     <div id="lobbyStatus" class="hint"></div>
     <button id="btnStartMp" class="btn pink big wide hidden">🏁 RENNEN STARTEN</button>
@@ -75,7 +62,7 @@
 
 <!-- Rennen HUD -->
 <section id="hud" class="hidden">
-  <div class="hud-tl"><div id="hudLap">RUNDE 1/3</div><div id="hudPos">POS 1/4</div><div id="hudBlitz" class="hud-blitz">📸 0/3</div></div>
+  <div class="hud-tl"><div id="hudLap">RUNDE 1/3</div><div id="hudPos">POS 1/4</div><div id="hudBlitz" class="hud-blitz">📸 0/2</div></div>
   <div class="hud-tc"><div id="hudTime">0:00.00</div><div id="hudLapTime">RUNDE 0:00.00</div><div id="hudBest"></div></div>
   <div class="hud-tr"><canvas id="minimap" width="120" height="120"></canvas></div>
   <div id="itemSlot" class="item-slot"><div class="paper">HA-<br>Only</div><div id="itemCount">x1</div></div>
@@ -85,10 +72,12 @@
   <div id="wrongWay" class="wrongway hidden">FALSCHE RICHTUNG!</div>
   <button id="btnPause" class="chip hud-pause">⏸</button>
   <button id="btnMute" class="chip hud-mute">🔊</button>
+  <button id="btnMusic" class="chip hud-music" aria-label="Musik an/aus">🎵</button>
 </section>
 
 <!-- Blitzer-Blitz + Norman-Anruf -->
 <div id="flash" class="flash"></div>
+<div id="radio" class="radio hidden" aria-live="polite"><div class="r-icon">📻</div><div class="r-body"><div class="r-head">POLIZEIFUNK · <span id="radioFrom">Zentrale</span> <i class="r-bars"><b></b><b></b><b></b><b></b></i></div><div id="radioMsg" class="r-msg"></div></div></div>
 <div id="norman" class="norman hidden" role="status" aria-live="polite">
   <div class="n-icon">📞</div>
   <div class="n-text"><div class="n-head">Eingehender Anruf · <b>Norman</b></div><div class="n-msg">Norman ruft an: Du fährst zu schnell! Der Vermieter beschwert sich.</div></div>
@@ -119,6 +108,7 @@
     <div id="resSub" class="hint"></div>
     <table id="resTable" class="restable"></table>
     <div id="resStats" class="hint res-stats"></div>
+    <div id="resAuto" class="hint res-stats"></div>
     <div class="row center">
       <button id="btnAgain" class="btn pink big">🔁 NOCHMAL</button>
       <button id="btnResBoard" class="btn white big">🏆</button>
