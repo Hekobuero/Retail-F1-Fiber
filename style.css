@@ -62,16 +62,25 @@ input:focus{border-color:#ff4fa8}
 .countdown{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font-size:110px;color:#fff;text-shadow:6px 6px 0 #E20074,-2px -2px 0 #000}
 .toast{position:absolute;left:50%;top:26%;transform:translateX(-50%);background:#E20074;color:#fff;padding:8px 16px;border:3px solid #fff;font-size:20px;white-space:nowrap;text-shadow:none;box-shadow:4px 4px 0 #5a0030}
 .wrongway{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#ffde00;font-size:30px}
-#touch{position:fixed;inset:0;z-index:6;pointer-events:none}
-#touch .tl,#touch .tr{position:absolute;bottom:max(10px,env(safe-area-inset-bottom));display:flex;gap:10px;align-items:flex-end;pointer-events:auto}
-#touch .tl{left:max(10px,env(safe-area-inset-left))}
-#touch .tr{right:max(10px,env(safe-area-inset-right))}
-.tbtn{width:84px;height:84px;border-radius:50%;border:3px solid rgba(255,255,255,.85);background:rgba(0,0,0,.4);color:#fff;font-size:30px;font-weight:900;touch-action:none;-webkit-user-select:none;user-select:none}
-.tbtn.on{background:rgba(226,0,116,.75)}
-.tbtn.gas{width:104px;height:104px;background:rgba(40,160,60,.55);font-size:22px}
-.tbtn.brake{width:72px;height:72px;font-size:13px;background:rgba(200,40,40,.5)}
-.tbtn.fire{width:70px;height:70px;font-size:22px;line-height:1;background:rgba(226,0,116,.6);margin-bottom:70px}
-.tbtn.fire small{font-size:10px}
+#touch{position:fixed;inset:0;z-index:6;pointer-events:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#touch *{-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+.stick-zone{position:absolute;left:0;bottom:0;width:46vw;height:72vh;pointer-events:auto;touch-action:none}
+.stick{position:absolute;width:150px;height:150px;left:calc(max(14px,env(safe-area-inset-left)) + 75px);bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);margin-left:0}
+.stick{transform:translate(-50%,0)}
+.stick[style*="top"]{transform:translate(-50%,-50%)}
+.stick-ring{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(255,255,255,.55);background:radial-gradient(circle,rgba(0,0,0,.15) 0,rgba(0,0,0,.38) 70%);box-shadow:0 0 0 2px rgba(226,0,116,.35)}
+.stick.on .stick-ring{border-color:rgba(255,255,255,.85);background:radial-gradient(circle,rgba(226,0,116,.18) 0,rgba(0,0,0,.42) 70%)}
+.stick.brake .stick-ring{box-shadow:0 0 0 4px rgba(230,50,50,.7)}
+.knob{position:absolute;left:50%;top:50%;width:64px;height:64px;border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(circle at 35% 35%,#ff7cc0,#E20074 60%,#8a0048);border:3px solid rgba(255,255,255,.9);opacity:.85;box-shadow:0 3px 8px rgba(0,0,0,.4)}
+.stick-hint{position:absolute;left:50%;top:-18px;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:bold;opacity:.55;text-shadow:1px 1px 0 #000}
+#touch .tr{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));width:150px;height:230px;pointer-events:none}
+.tbtn{position:absolute;border-radius:50%;border:3px solid rgba(255,255,255,.8);color:#fff;font-weight:900;touch-action:none;-webkit-user-select:none;user-select:none;pointer-events:auto;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-shadow:1px 1px 0 rgba(0,0,0,.5)}
+.tbtn.on{filter:brightness(1.35);transform:scale(.95)}
+.tbtn.gas{right:0;bottom:0;width:136px;height:136px;font-size:26px;background:rgba(40,170,70,.5)}
+.tbtn.gas.on{background:rgba(60,210,90,.75)}
+.tbtn.fire{right:28px;bottom:150px;width:78px;height:78px;font-size:24px;line-height:1;background:rgba(226,0,116,.55)}
+.tbtn.fire.on{background:rgba(255,60,170,.85)}
+.tbtn.fire small{font-size:10px;margin-top:2px}
 .restable{width:100%;border-collapse:collapse;margin:8px 0;font-size:15px}
 .restable td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.12);text-align:left}
 .restable tr.me td{background:rgba(226,0,116,.35)}
@@ -85,9 +94,11 @@ input:focus{border-color:#ff4fa8}
   .truck-name{font-size:18px}
   .truck-desc{font-size:11px}
   .btn.big{font-size:15px;padding:9px 14px}
-  .tbtn{width:72px;height:72px}
-  .tbtn.gas{width:92px;height:92px}
-  .tbtn.fire{margin-bottom:56px}
+  .stick{width:130px;height:130px;left:calc(max(10px,env(safe-area-inset-left)) + 65px)}
+  .knob{width:56px;height:56px}
+  #touch .tr{width:124px;height:200px}
+  .tbtn.gas{width:118px;height:118px}
+  .tbtn.fire{width:70px;height:70px;bottom:128px;right:24px}
   .countdown{font-size:80px}
   .item-slot{top:64px}
 }

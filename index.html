@@ -89,8 +89,13 @@
 
 <!-- Touch-Steuerung -->
 <section id="touch" class="hidden">
-  <div class="tl"><button id="tLeft" class="tbtn">◀</button><button id="tRight" class="tbtn">▶</button></div>
-  <div class="tr"><button id="tFire" class="tbtn fire">📄<br><small>FEUER</small></button><button id="tBrake" class="tbtn brake">BREMSE</button><button id="tGas" class="tbtn gas">GAS</button></div>
+  <div id="tStickZone" class="stick-zone">
+    <div id="tStick" class="stick"><div class="stick-ring"></div><div id="tKnob" class="knob"></div><span class="stick-hint">LENKEN · ▼ BREMSE</span></div>
+  </div>
+  <div class="tr">
+    <button id="tFire" class="tbtn fire" aria-label="HA-Only Vertrag feuern">📄<small>FEUER</small></button>
+    <button id="tGas" class="tbtn gas" aria-label="Gas">GAS</button>
+  </div>
 </section>
 
 <!-- Pause -->

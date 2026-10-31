@@ -588,7 +588,7 @@ function buildWorld(scene) {
       items.push({ x, z, mesh: m, respawn: 0 });
     }
   }
-  world = { group, items };
+  world = { group, items, blockers: placed };
   return world;
 }
 
@@ -902,7 +902,7 @@ function showGarageTruck(vi) {
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
-  camera.aspect = w / h; camera.fov = w < h ? 80 : 66; camera.updateProjectionMatrix();
+  camera.aspect = w / h; camera.fov = w < h ? 80 : 64; camera.updateProjectionMatrix();
   garageCam.aspect = w / h; garageCam.updateProjectionMatrix();
   checkRotate();
 }
@@ -927,9 +927,11 @@ function gridSlot(k) { const N = track.N; return [((N - 5 - Math.floor(k / 2) * 
 function initVehicle(v, k) { const [i, off] = gridSlot(k); v.place(i, off); race.vehicles.push(v); }
 function snapCamera() {
   const me = race.me; if (!me) return;
+  camHead = me.h;
   const dir = new THREE.Vector3(Math.sin(me.h), 0, Math.cos(me.h));
-  camPos.set(me.x, 0, me.z).addScaledVector(dir, -10).setY(4.6);
-  camLook.set(me.x, 1.5, me.z).addScaledVector(dir, 5);
+  camPos.set(me.x, 0, me.z).addScaledVector(dir, -9.2).setY(4.3);
+  camLook.set(me.x, 1.9, me.z).addScaledVector(dir, 6);
+  camOff.set(camPos.x - me.x, camPos.y, camPos.z - me.z); camLookOff.set(camLook.x - me.x, camLook.y, camLook.z - me.z);
   camera.position.copy(camPos); camera.lookAt(camLook);
 }
 function startSolo() {
@@ -972,7 +974,7 @@ function showResults() {
   resultShown = true;
   renderResults();
   showScreen('scr-result');
-  $('touch').classList.add('hidden');
+  $('touch').classList.add('hidden'); resetTouch();
   $('btnAgain').textContent = race.mp ? '👥 ZUR LOBBY' : '🔁 NOCHMAL';
 }
 function renderResults() {
@@ -991,8 +993,9 @@ function localInput() {
   if (AUTODRIVE || (race.me && race.me.finished)) return race.me.aiInput(1 / 60);
   const k = keys;
   let steer = 0;
-  if (k.left || touchState.left) steer -= 1;
-  if (k.right || touchState.right) steer += 1;
+  if (k.left) steer -= 1;
+  if (k.right) steer += 1;
+  steer = clamp(steer + touchState.steer, -1, 1);
   return { gas: (k.up || touchState.gas) ? 1 : 0, brake: (k.down || touchState.brake) ? 1 : 0, steer };
 }
 function stepRace(dt) {
@@ -1083,17 +1086,37 @@ Vehicle.prototype.interp = function (now) {
     this.x = s.x + Math.sin(s.h) * s.s * ex; this.z = s.z + Math.cos(s.h) * s.s * ex; this.h = s.h; this.speed = s.s;
   }
 };
+// Verfolgerkamera: immer hinter dem EIGENEN Truck (race.me), leicht erhöht,
+// mit Nachlauf, Blick nach vorn und mehr Abstand/FOV bei Tempo.
+const camTmp = { tp: new THREE.Vector3(), tl: new THREE.Vector3() };
+let camHead = 0; const camOff = new THREE.Vector3(), camLookOff = new THREE.Vector3();
+function camBlocked(x, z) {
+  for (const q of world.blockers) { const dx = x - q.x, dz = z - q.z; if (dx * dx + dz * dz < q.r * q.r) return true; }
+  return false;
+}
 function updateCamera(dt) {
   const me = race.me; if (!me) return;
-  const dir = new THREE.Vector3(Math.sin(me.h), 0, Math.cos(me.h));
-  const back = 9.5 + Math.max(0, me.speed) * 0.05;
-  const tp = new THREE.Vector3(me.x, 0, me.z).addScaledVector(dir, -back); tp.y = 4.4 + Math.max(0, me.speed) * 0.02;
-  const tl = new THREE.Vector3(me.x, 1.6, me.z).addScaledVector(dir, 6);
-  const k = 1 - Math.exp(-dt * 6);
-  camPos.lerp(tp, k); camLook.lerp(tl, 1 - Math.exp(-dt * 10));
+  const sp = Math.max(0, me.speed), sN = clamp(sp / 45, 0, 1);
+  // Kamerarichtung folgt der Fahrtrichtung mit leichtem Nachlauf (bei Dreher nicht mitdrehen)
+  if (me.spinT <= 0) camHead += wrapAng(me.h - camHead) * (1 - Math.exp(-dt * 5));
+  const portrait = camera.aspect < 1;
+  let back = (portrait ? 12 : 9.2) + sN * 2.6, up = (portrait ? 5.6 : 4.3) + sN * 0.7;
+  const sx = Math.sin(camHead), sz = Math.cos(camHead);
+  // nicht in Häuser/Bäume fahren: Abstand verkürzen, falls der Kamerapunkt in einem Hindernis läge
+  for (let k = 0; k < 6 && camBlocked(me.x - sx * back, me.z - sz * back); k++) { back *= 0.78; up += 0.5; }
+  const tp = camTmp.tp.set(me.x - sx * back, up, me.z - sz * back);
+  // Look-ahead: Punkt vor dem Truck, damit die Straße oberhalb der Touch-Buttons sichtbar ist
+  const ahead = 6 + sN * 6;
+  const tl = camTmp.tl.set(me.x + sx * ahead, portrait ? 1.4 : 1.9, me.z + sz * ahead);
+  // Nachlauf relativ zum Truck (sonst wächst der Abstand mit dem Tempo)
+  tp.x -= me.x; tp.z -= me.z; tl.x -= me.x; tl.z -= me.z;
+  camOff.lerp(tp, 1 - Math.exp(-dt * 6)); camLookOff.lerp(tl, 1 - Math.exp(-dt * 10));
+  camPos.set(me.x + camOff.x, camOff.y, me.z + camOff.z); camLook.set(me.x + camLookOff.x, camLookOff.y, me.z + camLookOff.z);
   camera.position.copy(camPos);
   if (shakeT > 0) { shakeT -= dt; camera.position.x += (Math.random() - 0.5) * shakeT; camera.position.y += (Math.random() - 0.5) * shakeT; }
   camera.lookAt(camLook);
+  const fov = (portrait ? 80 : 64) + sN * 8;
+  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); }
 }
 let hudCache = {};
 function setText(id, t) { if (hudCache[id] !== t) { hudCache[id] = t; $(id).textContent = t; } }
@@ -1257,7 +1280,7 @@ function startMp(p) {
 }
 async function quitRace() {
   const wasMp = race.mp;
-  clearRace(); $('hud').classList.add('hidden'); $('touch').classList.add('hidden'); $('countdown').classList.add('hidden'); $('wrongWay').classList.add('hidden');
+  clearRace(); resetTouch(); $('hud').classList.add('hidden'); $('touch').classList.add('hidden'); $('countdown').classList.add('hidden'); $('wrongWay').classList.add('hidden');
   if (wasMp && Net.ch) { Net.setStatus('lobby'); showScreen('scr-lobby'); renderLobby(); }
   else showScreen('scr-select');
 }
@@ -1314,7 +1337,7 @@ click('btnJoin', () => {
 $('codeInput').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); });
 click('btnStartMp', () => { goFullscreen(); hostStart(); });
 click('btnLeave', async () => { await Net.leave(); showScreen('scr-select'); });
-click('btnPause', () => { if (!race.active) return; paused = !race.mp; showScreen('scr-pause'); $('touch').classList.add('hidden'); });
+click('btnPause', () => { if (!race.active) return; paused = !race.mp; showScreen('scr-pause'); $('touch').classList.add('hidden'); resetTouch(); });
 click('btnResume', () => { paused = false; showScreen(null); if (isTouch || PARAMS.has('touchui')) $('touch').classList.remove('hidden'); lastT = performance.now(); });
 click('btnQuit', () => { paused = false; quitRace(); });
 click('btnMute', () => setMute(!audio.muted));
@@ -1335,20 +1358,59 @@ window.addEventListener('keydown', e => {
   ensureAudio();
 });
 window.addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
-window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; for (const k in touchState) touchState[k] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; resetTouch(); });
 function doFire() {
   if (!race.active || race.state !== 'run' || !race.me || race.me.finished || race.me.spinT > 0) return;
   if (race.me.ammo <= 0) { toast('Kein Vertrag dabei – fahr durch eine ?-Box!'); return; }
   fireFrom(race.me);
 }
-const touchState = { left: false, right: false, gas: false, brake: false };
-for (const [id, k] of [['tLeft', 'left'], ['tRight', 'right'], ['tGas', 'gas'], ['tBrake', 'brake'], ['tFire', 'fire']]) {
-  const el = $(id);
-  const on = e => { e.preventDefault(); ensureAudio(); if (k === 'fire') doFire(); else touchState[k] = true; el.classList.add('on'); if (navigator.vibrate && k === 'fire') navigator.vibrate(15); };
-  const off = e => { e.preventDefault(); if (k !== 'fire') touchState[k] = false; el.classList.remove('on'); };
-  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
-  el.addEventListener('contextmenu', e => e.preventDefault());
+// Touch: links analoger Stick (Lenken, nach unten ziehen = Bremse/Rückwärts), rechts GAS + FEUER
+const touchState = { steer: 0, gas: false, brake: false, stickId: null, gasIds: new Set() };
+{
+  const zone = $('tStickZone'), base = $('tStick'), knob = $('tKnob');
+  let cx = 0, cy = 0;
+  const R = () => base.getBoundingClientRect().width * 0.42;
+  const center = () => { const r = base.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; };
+  const move = e => {
+    const rad = R(); let dx = e.clientX - cx, dy = e.clientY - cy; const d = Math.hypot(dx, dy);
+    if (d > rad) { dx *= rad / d; dy *= rad / d; }
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    let sx = dx / rad; const dz = 0.1;
+    sx = Math.abs(sx) < dz ? 0 : Math.sign(sx) * (Math.abs(sx) - dz) / (1 - dz);
+    touchState.steer = clamp(sx * Math.abs(sx) * 0.35 + sx * 0.65, -1, 1); // leicht progressiv
+    touchState.brake = dy / rad > 0.55;
+    base.classList.toggle('brake', touchState.brake);
+  };
+  const reset = () => { touchState.stickId = null; touchState.steer = 0; touchState.brake = false; knob.style.transform = 'translate(-50%,-50%)'; base.classList.remove('on', 'brake'); base.style.left = base.style.top = base.style.bottom = ''; };
+  zone.addEventListener('pointerdown', e => {
+    e.preventDefault(); ensureAudio();
+    if (touchState.stickId !== null) return;
+    touchState.stickId = e.pointerId; try { zone.setPointerCapture(e.pointerId); } catch (_) {}
+    base.classList.add('on'); center();
+    // schwebender Stick: weit daneben getippt -> Stick springt unter den Daumen
+    if (Math.hypot(e.clientX - cx, e.clientY - cy) > R() * 1.3) {
+      const zr = zone.getBoundingClientRect(), half = base.offsetWidth / 2;
+      const x = clamp(e.clientX - zr.left, half, zr.width - half), y = clamp(e.clientY - zr.top, half, zr.height - half);
+      base.style.left = x + 'px'; base.style.top = y + 'px'; base.style.bottom = 'auto'; center();
+    }
+    move(e);
+  });
+  zone.addEventListener('pointermove', e => { if (e.pointerId === touchState.stickId) { e.preventDefault(); move(e); } });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) zone.addEventListener(ev, e => { if (e.pointerId === touchState.stickId) reset(); });
+  touchState.resetStick = reset;
+
+  const gas = $('tGas');
+  gas.addEventListener('pointerdown', e => { e.preventDefault(); ensureAudio(); touchState.gasIds.add(e.pointerId); try { gas.setPointerCapture(e.pointerId); } catch (_) {} touchState.gas = true; gas.classList.add('on'); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) gas.addEventListener(ev, e => { touchState.gasIds.delete(e.pointerId); if (!touchState.gasIds.size) { touchState.gas = false; gas.classList.remove('on'); } });
+
+  const fire = $('tFire');
+  fire.addEventListener('pointerdown', e => { e.preventDefault(); ensureAudio(); doFire(); fire.classList.add('on'); if (navigator.vibrate) navigator.vibrate(15); setTimeout(() => fire.classList.remove('on'), 150); });
+  for (const el of [zone, gas, fire, $('touch')]) { el.addEventListener('contextmenu', e => e.preventDefault()); el.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); }
 }
+function resetTouch() { touchState.resetStick && touchState.resetStick(); touchState.gas = false; touchState.gasIds.clear(); $('tGas').classList.remove('on'); }
+document.addEventListener('contextmenu', e => { if (race.active) e.preventDefault(); });
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 document.addEventListener('touchmove', e => { if (race.active) e.preventDefault(); }, { passive: false });
 
 /* =====================================================================
@@ -1397,6 +1459,7 @@ requestAnimationFrame(frame);
 // Debug-/Test-Schnittstelle
 window.__rf1 = {
   get race() { return race; }, get net() { return Net; }, projectiles, TRUCKS,
+  cam() { return { x: camera.position.x, y: camera.position.y, z: camera.position.z, fov: camera.fov }; },
   state() { const me = race.me; return { active: race.active, mp: race.mp, state: race.state, time: race.time, fps, screen: curScreen, me: me && { id: me.id, lap: me.lap, prog: me.prog, x: me.x, z: me.z, speed: me.speed, ammo: me.ammo, finished: me.finished, spinT: me.spinT, pos: racingOrder().indexOf(me) + 1 }, vehicles: race.vehicles.map(v => ({ id: v.id, name: v.name, remote: v.remote, ai: v.isAI, x: v.x, z: v.z, lap: v.lap, finished: v.finished, spinT: v.spinT, left: !!v.left })), players: Net.players.map(p => ({ id: p.id, name: p.name, status: p.status })) }; },
   teleportBehind(id, dist = 14) { const t = race.vehicles.find(v => v.id === id), me = race.me; if (!t || !me) return false; const i = t.idx, back = (i - Math.round(dist / 1.6) + track.N) % track.N, l = lateral(i, t.x, t.z); me.place(back, l); me.lap = t.lap; me.updateProgress(true); snapCamera(); return true; },
   giveAmmo(n = 3) { if (race.me) { race.me.ammo = n; updateItemHud(); } },

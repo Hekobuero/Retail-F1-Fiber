@@ -28,14 +28,31 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
 - **Name** wird einmal eingegeben und im Browser gespeichert (localStorage).
 
 ## Steuerung
-| | Tastatur | Handy |
-|---|---|---|
-| Gas | ↑ / W | GAS |
-| Bremse / Rückwärts | ↓ / S | BREMSE |
-| Lenken | ← → / A D | ◀ ▶ |
-| HA-Only Vertrag | Leertaste | FEUER |
-| Pause | Esc / P | ⏸ |
-| Ton an/aus | M | 🔊 |
+**Smartphone (Querformat, empfohlen).** Auf Touch-Geräten werden die Touch-Steuerelemente automatisch eingeblendet.
+- **Links unten: analoger Stick zum Lenken.** Je weiter der Daumen zur Seite geht, desto stärker lenkt der Truck.
+  - Stick **nach unten ziehen** = Bremse bzw. Rückwärts (der Ring leuchtet dann rot).
+  - Tippt man irgendwo in der linken unteren Bildschirmhälfte, springt der Stick unter den Daumen.
+- **Rechts unten: großer GAS-Button.**
+- **Darüber: FEUER** für den HA-Only Vertrag, gut mit dem rechten Daumen erreichbar.
+- **Multitouch:** Lenken, Gas und Feuer funktionieren gleichzeitig.
+- Seitenscrollen, Zoom und Long-Press-Menüs sind gesperrt.
+- Die Bedienelemente sind halbtransparent und berücksichtigen Notch/Safe-Area.
+
+**Kamera:** Jeder Spieler sieht seinen **eigenen** Truck von hinten (Verfolgerkamera).
+- Leichter Nachlauf, Blick nach vorn.
+- Bei Tempo etwas mehr Abstand und Sichtfeld.
+- Vor Häusern und Bäumen rückt die Kamera näher heran.
+
+**Tastatur (Desktop):**
+
+| Aktion | Taste |
+|---|---|
+| Gas | ↑ / W |
+| Bremse / Rückwärts | ↓ / S |
+| Lenken | ← → / A D |
+| HA-Only Vertrag | Leertaste |
+| Pause | Esc / P |
+| Ton an/aus | M |
 
 ## Hosting auf GitHub Pages
 1. Den Inhalt dieses Ordners ins Repo pushen, z. B. `Hekobuero/Retail-F1-Fiber`.
@@ -57,12 +74,12 @@ Supabase-URL und der öffentliche *publishable* Key stehen oben in `js/main.js` 
 URL-Parameter zum Testen:
 - `?laps=1` setzt die Rundenanzahl (1–9).
 - `?autodrive` lässt den eigenen Truck von der KI fahren.
-- `?touchui` zeigt die Touch-Buttons auch am Desktop.
+- `?touchui` zeigt die Touch-Steuerung (Stick, GAS, FEUER) auch am Desktop.
 
 ## Bekannte Einschränkungen
 - Die ?-Boxen werden im Multiplayer nicht synchronisiert. Jeder Client verwaltet sie selbst, deshalb kann jeder jede Box einsammeln.
 - Kollisionen mit Mitspielern werden nur lokal aufgelöst: Man wird selbst weggeschoben, der andere nicht.
 - Treffer entscheidet der getroffene Client. Bei hoher Latenz kann ein Vertrag deshalb optisch „durchfliegen“.
 - Maximal 8 Spieler pro Rennen. Wer während eines laufenden Rennens beitritt, fährt erst beim nächsten Rennen mit.
-- Neigungssteuerung (Tilt) ist nicht eingebaut; gesteuert wird über die Touch-Buttons.
+- Neigungssteuerung (Tilt) ist nicht eingebaut; gesteuert wird über den Touch-Stick.
 - Es gibt keine Bestenliste; Bestzeiten werden nicht gespeichert.
