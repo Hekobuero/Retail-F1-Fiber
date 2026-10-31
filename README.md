@@ -37,10 +37,11 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
 - **Tempo:**
   - Je nach Fahrzeug liegt die Höchstgeschwindigkeit zwischen ca. 126 km/h (Trabi) und ca. 176 km/h (BMW).
   - **Windschatten** dicht hinter einem anderen Fahrzeug bringt +8 % („💨 WINDSCHATTEN“).
-- **Crashs:**
-  - Fahrzeuge kollidieren und werden auseinandergeschoben.
-  - Ein echter Aufprall wirkt wie ein HA-Only-Treffer – für **beide** beteiligten Fahrzeuge: Dreher, starkes Abbremsen, kurz unverwundbar („💥 Crash mit NAME!“).
-  - In den ersten 3 Sekunden nach dem Start gibt es keine Dreher.
+- **Zusammenstöße (Rempler):**
+  - Fahrzeuge stoßen nur gegeneinander und fahren weiter: kein Dreher, kein Kontrollverlust, kein Zurückwerfen.
+  - Sie werden physisch auseinandergeschoben, damit sie sich nicht überlappen, und bekommen einen kleinen Seitenschubs, damit sie aneinander vorbeigleiten.
+  - Ein Rempler kostet höchstens ca. 4 % Tempo. Dazu gibt es ein kurzes dumpfes Rumms, ein leichtes Kamerawackeln und auf Handys eine kurze Vibration.
+  - Das gilt für KI und Multiplayer gleich. Dreher gibt es nur noch durch HA-Only-Treffer.
 - **Norman ruft an:** Ab **150 km/h** fährt von rechts ein Anruf-Fenster herein: „Norman ruft an: Du fährst zu schnell! Der Vermieter beschwert sich.“
   - Es klingelt, das Fenster bleibt ca. 3 s und meldet sich höchstens alle ~18 s.
 - **Blitzer (Starenkasten):**
@@ -48,10 +49,34 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
   - Wer schneller als 120 km/h vorbeifährt, wird geblitzt: weißer Blitz, Kamera-Klick und „GEBLITZT! (1/2)“. Das zählt höchstens einmal pro Runde.
   - Bei **2x geblitzt** ist man **disqualifiziert**: Das Fahrzeug bleibt stehen und verschwindet, in der Ergebnisliste steht „DSQ (2x geblitzt)“.
   - Das gilt auch für die KI, die meistens bremst, aber nicht immer.
+- **?-Boxen (Loot):** Jede Box mit „?“ gibt genau **ein** Ergebnis.
+  - Eine kurze Slot-Animation zeigt dabei nacheinander alle Möglichkeiten (HA-Only, Business-Vertrag, ✖) und bleibt dann auf einer stehen; dazu kommt ein Toast.
+  - Wahrscheinlichkeiten: **HA-Only 2/5 · Niete 2/5 („❌ Niete – leider nix!“) · Business-Vertrag 1/5**.
+  - Jede Box wird nach 5 s wieder aktiv.
 - **Waffe „HA-Only Vertrag“:**
-  - Einsammeln an den **?-Boxen** (Start mit 1, maximal 3).
+  - Jeder (Spieler, KI, Multiplayer) startet jedes Rennen mit **0 Verträgen**; man muss sie erst an den **?-Boxen** einsammeln (maximal 3).
+  - Ohne Vertrag zeigt das HUD „x0“, und **FEUER** ist gedimmt und deaktiviert.
   - Abfeuern mit **Leertaste** oder **FEUER**; der Vertrag sucht sich leicht sein Ziel.
   - Getroffene drehen sich und werden stark abgebremst.
+- **BUSINESS-Vertrag (Mine):**
+  - Man kann höchstens einen halten; das HUD zeigt dann 💼 BUSINESS neben dem Item-Slot.
+  - Mit **💼** (kleiner Button links neben GAS) oder **B** wird er **hinter** dem eigenen Truck abgelegt.
+  - Aussehen: Aktenkoffer mit blinkendem roten Licht, das nachts leuchtet.
+  - Wer hineinfährt, dreht sich wie bei einem HA-Only-Treffer: KI, Mitspieler und später auch der Ableger selbst (nach ca. 1 s Schonzeit). Danach ist die Mine weg.
+  - Sonst bleibt sie **das ganze Rennen** liegen, ohne Zeitlimit.
+  - Die KI sammelt und legt Minen auch.
+  - Im Multiplayer werden Ablegen und Entfernen per ID übertragen; der erste Treffer gewinnt.
+- **TV-VERTRÄGE und RAKETE:**
+  - **Wo:** Die blauen, schwebenden TV-Vertrag-Symbole liegen **nur in Kurven**, auf der Ideallinie am Scheitelpunkt (Innenseite). Sie stehen in Gruppen von **2–4** pro Kurve, drehen sich und leuchten nachts.
+  - **Nachschub:** Eingesammelte kommen nach 14 s wieder, damit auch in späteren Runden welche da sind.
+  - **Zähler:** Das HUD zeigt „📺 TV x/5“. Jeder Start beginnt bei 0, mehr als 5 geht nicht.
+  - **Rakete:** Bei 5/5 leuchtet der **🚀 RAKETE**-Button (links neben FEUER) bzw. Taste **R**. Abfeuern verbraucht alle 5.
+  - **Ziel:** Die Rakete fliegt die Strecke entlang nach vorne, zur dichtesten Gruppe vor einem. Ist niemand vor einem, nimmt sie den nächsten Fahrer.
+  - **Einschlag:** Es gibt einen stilisierten **Nuklearpilz**: Blitz, aufsteigender Stiel und Pilzkappe, Druckwellenring, Staub und eine Farbe, die von glühend über Feuer zu Rauch wechselt. Er bleibt etwa 7 s sichtbar.
+  - **Effekte:** Dazu kommen ein tiefer Knall, in der Nähe Kamerawackeln und Bildschirmblitz sowie Vibration auf Handys.
+  - **Wirkung:** Bis zu **4 Trucks im Umkreis von 18 m** drehen sich wie bei einem HA-Only-Treffer. Der Schütze ist nie betroffen.
+  - **KI und Multiplayer:** Die KI feuert gelegentlich selbst. Im Multiplayer werden Start, Einschlagort und die getroffenen IDs übertragen.
+  - **Bestenliste:** Raketen- und Minen-Treffer zählen **nicht** als HA-Only-Treffer.
 - **Solo-Modus** gegen 6 KI-Gegner mit zufälligen Fahrzeugen. Die KI schießt, weicht aus und bremst meistens vor dem Blitzer.
   - Die Zahl der Gegner lässt sich mit `?ai=0…7` ändern.
 - **Multiplayer** für **bis zu 8 Spieler** über Supabase Realtime (Broadcast + Presence, **ohne Datenbank-Tabellen**):
@@ -61,7 +86,7 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
     - Gestartet wird mit genau den Spielern, die gerade in der Lobby sind (maximal 8).
     - Wer währenddessen dazukommt, sieht „Rennen läuft – du bist beim nächsten dabei“. Ein 9. Spieler sieht „Lobby voll – Rennen läuft/voll“ und rückt nach.
   - **Nach dem Rennen** geht es automatisch zurück in die Lobby: 6 s nachdem alle im Ziel, disqualifiziert oder ausgestiegen sind, spätestens nach 25 s. Mit **ZUR LOBBY** geht es sofort.
-  - Übertragen werden das gewählte Fahrzeug, Positionen (5–12 Hz je nach Spielerzahl, interpoliert), Schüsse und Treffer, Crashs, Blitzer-Strafen, DSQ und der Zieleinlauf.
+  - Übertragen werden das gewählte Fahrzeug, Positionen (5–12 Hz je nach Spielerzahl, interpoliert), Schüsse und Treffer, Raketen (Start, Einschlag, getroffene IDs), Business-Minen (Ablegen/Entfernen), Rempler, Blitzer-Strafen, DSQ und der Zieleinlauf.
 - **Sound** komplett prozedural per WebAudio, ohne Audiodateien:
   - **Musik:** eigene, fröhliche Chiptune-Komposition im Retro-Kart-Stil, keine Kopie einer echten Melodie. Im Menü läuft ein ruhiges Thema (F-Dur, 108 BPM, Dreieck-Lead), im Rennen ein flottes (C-Dur, 150 BPM, 25-%-Puls-Lead, Bass und leichtes Schlagzeug).
     - Bei Norman und beim Polizeifunk wird die Musik leiser.
@@ -74,14 +99,14 @@ Läuft rein statisch im Browser (Handy im Querformat und Desktop) und eignet sic
   - Motor (leise und weich abgemischt, damit die Musik hörbar bleibt) mit eigener Klangfarbe je Fahrzeugklasse (Diesel, Van, V8 im BMW, Zweitakt im Trabi); Tonhöhe und Lautstärke folgen dem Tempo, mit „Gangwechseln“.
   - Reifenquietschen bei starkem Lenken und bei Drehern.
   - Hupe: Taste **H** sowie automatisch bei knappen Überholmanövern.
-  - Crash, Papier-Wusch beim Vertragswurf, Treffer, Item-Glockenspiel, Blitzer-Klick, Telefonklingeln (Norman), Countdown, Startton, Runden-Jingle, Sieger-Fanfare und eine traurige Posaune bei DSQ.
+  - Rempler-Rumms, Papier-Wusch beim Vertragswurf, Treffer, Item-Glockenspiel, Blitzer-Klick, Telefonklingeln (Norman), Countdown, Startton, Runden-Jingle, Sieger-Fanfare und eine traurige Posaune bei DSQ.
   - Audio wird mit der ersten Berührung freigeschaltet (auch auf iOS). Die Stummschaltung (🔊 / Taste M) gilt für alles, auch für Musik und Sprachausgabe; die Gesamtlautstärke wird über einen Kompressor begrenzt.
 - **Name** wird einmal eingegeben und im Browser gespeichert.
 
 ## Bestenlisten 🏆
 Es gibt zwei Listen mit je den Top 15 pro Spielername; das zuletzt gefahrene Fahrzeug steht klein dahinter:
 - **Meiste Siege**: Rennen auf Platz 1 beendet, solo gegen KI oder im Multiplayer.
-- **Meiste HA-Only-Treffer**: Vertrags-Treffer auf Gegner. Crashs zählen nicht.
+- **Meiste HA-Only-Treffer**: Vertrags-Treffer auf Gegner. Rempler, Raketen und Business-Minen zählen nicht.
 
 Die Listen öffnet man im Hauptmenü über **🏆 BESTENLISTE** oder nach dem Rennen über den 🏆-Knopf. Auf schmalen Bildschirmen schaltet man zwischen den beiden Listen per Tab um.
 
@@ -100,6 +125,7 @@ Die Flappy-Tabelle `scores` wird nicht angefasst. Solange die Tabelle fehlt, zei
   - Tippt man irgendwo in der linken unteren Bildschirmhälfte, springt der Stick unter den Daumen.
 - **Rechts unten: großer GAS-Button.**
 - **Darüber: FEUER** für den HA-Only Vertrag, gut mit dem rechten Daumen erreichbar.
+- **Daneben: 🚀 RAKETE** (leuchtet bei 5/5 TV-Verträgen) und links neben GAS der kleine **💼**-Button für den Business-Vertrag. Beide liegen weder über dem Stick noch über GAS und sind gedimmt, solange man nichts hat.
 - **Multitouch:** Lenken, Gas und Feuer funktionieren gleichzeitig.
 - Seitenscrollen, Zoom und Long-Press-Menüs sind gesperrt.
 - Die Bedienelemente sind halbtransparent und berücksichtigen Notch/Safe-Area.
@@ -117,6 +143,8 @@ Die Flappy-Tabelle `scores` wird nicht angefasst. Solange die Tabelle fehlt, zei
 | Bremse / Rückwärts | ↓ / S |
 | Lenken | ← → / A D |
 | HA-Only Vertrag | Leertaste |
+| Rakete (bei 5/5 TV) | R |
+| Business-Vertrag ablegen | B |
 | Pause | Esc / P |
 | Ton an/aus | M |
 | Hupe | H |
@@ -145,14 +173,15 @@ URL-Parameter zum Testen:
 - `?laps=1` setzt die Rundenanzahl (1–9).
 - `?autodrive` lässt den eigenen Truck von der KI fahren.
 - `?hour=N` erzwingt eine Uhrzeit von 0 bis 24, z. B. `?hour=23` für Nacht.
-- `?touchui` zeigt die Touch-Steuerung (Stick, GAS, FEUER) auch am Desktop.
+- `?touchui` zeigt die Touch-Steuerung (Stick, GAS, FEUER, RAKETE, 💼) auch am Desktop.
 - `?ai=0..7` setzt die Zahl der KI-Gegner im Solo-Rennen (Standard 6).
 - `?testlobby=NAME` funktioniert nur zusammen mit `?autodrive` und verlegt die Lobby für automatische Tests auf einen eigenen Kanal, damit echte Spieler nicht gestört werden.
 - `?nostats` meldet keine Ergebnisse. Mit `?autodrive`, `?laps` oder `?ai` wird ohnehin nichts gemeldet, damit Testläufe die Bestenliste nicht verfälschen.
 
 ## Bekannte Einschränkungen
-- Die ?-Boxen werden im Multiplayer nicht synchronisiert. Jeder Client verwaltet sie selbst, deshalb kann jeder jede Box einsammeln.
-- Kollisionen mit Mitspielern werden auf jedem Gerät für das eigene Fahrzeug aufgelöst. Den Dreher bekommen beide, weil der Crash übertragen wird; bei hoher Latenz kann ein Zusammenstoß aber leicht versetzt wirken.
+- Die ?-Boxen und TV-Verträge werden im Multiplayer nicht synchronisiert. Jeder Client verwaltet sie selbst, deshalb kann jeder jede Box einsammeln; das Loot wird lokal ausgewürfelt.
+- Raketen-Treffer entscheidet der Client des Schützen anhand seiner (leicht verzögerten) Sicht auf die Positionen.
+- Kollisionen mit Mitspielern werden auf jedem Gerät für das eigene Fahrzeug aufgelöst. Ein Rempler wird zusätzlich übertragen, damit beide denselben kleinen Schubs bekommen (ohne Dreher); bei hoher Latenz kann er aber leicht versetzt wirken.
 - Treffer entscheidet der getroffene Client. Bei hoher Latenz kann ein Vertrag deshalb optisch „durchfliegen“.
 - Maximal 8 Spieler pro Rennen. Wer während eines laufenden Rennens beitritt, fährt erst beim nächsten Rennen mit.
 - Leistung: Die Stadt besteht aus wenigen zusammengeführten Meshes (pro Material und 110-m-Zelle), Laternen und Straßenmöbel sind InstancedMeshes, und es gibt keine Schatten. Am meisten Draw Calls kosten die detailreichen Trucks, deshalb werden Trucks im Nebel nicht gezeichnet.

@@ -185,3 +185,30 @@ input:focus{border-color:#ff4fa8}
 .r-bars b:nth-child(1){height:30%;animation-delay:-.1s}.r-bars b:nth-child(2){height:60%;animation-delay:-.3s}.r-bars b:nth-child(3){height:90%;animation-delay:-.2s}.r-bars b:nth-child(4){height:50%;animation-delay:-.4s}
 @keyframes rbar{from{transform:scaleY(.3)}to{transform:scaleY(1)}}
 @media (max-height:430px){.radio{width:min(330px,44vw);padding:8px 10px}.r-msg{font-size:12px}.r-icon{width:36px;height:36px;font-size:20px}}
+/* FEUER ohne Vertrag: gedimmt + deaktiviert */
+.tbtn.fire.disabled{opacity:.35;filter:grayscale(1);box-shadow:none}
+/* TV-Verträge, Rakete, Business-Mine, Loot-Rolle */
+.hud-tv{font-size:15px;margin-top:2px;color:#9fe8ff}
+.hud-tv.ready{color:#ffd400;animation:blink .7s steps(2) infinite}
+.mine-slot{position:absolute;left:calc(50% + 62px);top:76px;font-size:24px;line-height:1;display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.45);border:2px solid #ff3030;border-radius:6px;padding:3px 6px;box-shadow:0 0 8px rgba(255,48,48,.7)}
+.mine-slot small{font-size:8px;color:#ffd9a0}
+@media (max-height:430px){.mine-slot{top:64px}}
+.loot-roll{position:absolute;left:calc(50% - 150px);top:70px;width:66px;height:66px;border-radius:10px;background:rgba(10,10,20,.8);border:3px solid #ffd400;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(255,212,0,.6);pointer-events:none;z-index:6}
+.loot-roll.landed{animation:lootpop .35s ease-out}
+@keyframes lootpop{0%{transform:scale(1.45)}100%{transform:scale(1)}}
+.loot-roll .paper{width:34px;height:42px;background:#fff;color:#E20074;font-size:11px;line-height:1.1;display:flex;align-items:center;justify-content:center;text-align:center;border-top:7px solid #E20074;transform:rotate(-6deg);text-shadow:none}
+.loot-roll .biz{font-size:30px;display:flex;flex-direction:column;align-items:center;line-height:1}.loot-roll .biz small{font-size:8px;color:#ffd9a0;margin-top:2px}
+.loot-roll .niete{font-size:40px;color:#ff3b3b;font-weight:900;text-shadow:0 0 6px #000}
+.tbtn.rocket{right:118px;bottom:150px;width:70px;height:70px;font-size:22px;line-height:1;background:rgba(40,60,120,.55)}
+.tbtn.rocket small{font-size:9px;margin-top:2px}
+.tbtn.rocket.ready{background:rgba(255,140,0,.85);border-color:#ffd400;box-shadow:0 0 16px 4px rgba(255,170,0,.8);animation:rkpulse .8s ease-in-out infinite}
+@keyframes rkpulse{50%{box-shadow:0 0 26px 8px rgba(255,200,0,.95)}}
+.tbtn.mine{right:150px;bottom:14px;width:58px;height:58px;font-size:24px;background:rgba(110,70,35,.55)}
+.tbtn.mine.ready{background:rgba(160,95,40,.9);box-shadow:0 0 12px 3px rgba(255,60,60,.75)}
+.tbtn.rocket.disabled,.tbtn.mine.disabled{opacity:.32;filter:grayscale(1);box-shadow:none;animation:none}
+.nuke-flash{position:fixed;inset:0;background:radial-gradient(circle,#fffbe6 0%,#ffd27a 60%,#ff8a2a 100%);opacity:0;transition:opacity .8s ease-out;pointer-events:none;z-index:14}
+@media (max-height:430px){
+  .tbtn.rocket{width:62px;height:62px;bottom:128px;right:104px}
+  .tbtn.mine{width:52px;height:52px;right:130px;bottom:10px}
+  .loot-roll{top:58px;width:58px;height:58px;left:calc(50% - 138px)}
+}

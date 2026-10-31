@@ -1117,6 +1117,7 @@ const sfx = {
   pickup() { [784, 988, 1319, 1568].forEach((f, i) => tone(f, 0.12, 'triangle', 0.09, null, i * 0.05)); },
   fire() { noise(0.4, 0.3, 700, 3200, 'bandpass', 0, 2); noise(0.25, 0.18, 3000, 900, 'bandpass', 0.12, 3); },
   hit() { noise(0.5, 0.35, 900, 120); tone(220, 0.4, 'sawtooth', 0.09, 60); },
+  thud(k = 0.5) { noise(0.13, 0.12 + 0.18 * k, 700, 120, 'lowpass'); tone(95, 0.09, 'sine', 0.06 + 0.06 * k, 55); },
   crash() { noise(0.6, 0.5, 1400, 80, 'lowpass'); [180, 260, 140].forEach((f, i) => tone(f, 0.14, 'square', 0.07, f * 0.6, i * 0.05)); noise(0.3, 0.2, 5000, 2000, 'highpass', 0.05); },
   bump() { tone(120, 0.12, 'square', 0.07, 70); },
   horn() { tone(392, 0.38, 'square', 0.06); tone(494, 0.38, 'square', 0.05); },
@@ -1137,7 +1138,7 @@ class Vehicle {
     this.variant = TRUCKS[this.vi]; this.stats = statsOf(this.variant);
     this.x = 0; this.z = 0; this.h = 0; this.speed = 0; this.steer = 0; this.steerVis = 0;
     this.idx = -1; this.lap = 0; this.armed = true; this.prog = 0; this.lapStart = 0; this.lapTimes = []; this.best = Infinity;
-    this.finished = false; this.finishTime = 0; this.spinT = 0; this.invulnT = 0; this.ammo = 1; this.fireCD = 2 + Math.random() * 3;
+    this.finished = false; this.finishTime = 0; this.spinT = 0; this.invulnT = 0; this.ammo = 0; this.fireCD = 2 + Math.random() * 3;
     this.wrongT = 0; this.offroad = false; this.draft = false; this.crashCD = 0;
     this.strikes = 0; this.blitzLap = -1; this.dsq = false; this.dsqT = 0; this.careful = Math.random() < 0.85;
     this.mesh = makeTruck(this.vi); scene.add(this.mesh);
@@ -1425,6 +1426,7 @@ function clearRace() {
   for (const q of projectiles.slice()) removeProjectile(q.id);
   race.vehicles = []; race.me = null; race.active = false; race.state = 'idle'; resultShown = false; race.myHits = 0; race.reported = false; race.countedHits = new Set();
   for (const it of world.items) { it.respawn = 0; it.mesh.visible = true; }
+  clearSpecials();
 }
 function gridSlot(k) { const N = track.N; return [((N - 5 - Math.floor(k / 2) * 6) % N + N) % N, k % 2 ? -3.6 : 3.6]; }
 function initVehicle(v, k) { const [i, off] = gridSlot(k); v.place(i, off); race.vehicles.push(v); }
@@ -1454,7 +1456,8 @@ function startSolo() {
 function beginCountdown(ms) {
   race.active = true; race.state = 'countdown'; race.goAt = performance.now() + ms; race.time = 0; race.cdShown = -1;
   Radio.next = performance.now() + 15000; Radio.pending = false; normanNext = 0; setEngineClass(race.me ? race.me.variant.snd : 'diesel'); updateBlitzHud();
-  for (const v of race.vehicles) { v.lapStart = 0; }
+  for (const v of race.vehicles) { v.lapStart = 0; v.ammo = 0; } // jeder startet ohne HA-Only-Vertrag
+  specialsRaceStart();          // 0 TV-Verträge, keine Mine, Pickups sichtbar
   snapCamera(); updateItemHud();
   showScreen(null); $('hud').classList.remove('hidden'); if (isTouch || PARAMS.has('touchui')) $('touch').classList.remove('hidden');
   $('countdown').classList.remove('hidden');
@@ -1548,7 +1551,7 @@ function stepRace(dt) {
     if (v.held) { v.speed = 0; if (v.spinT > 0) v.spinT -= dt; if (v.invulnT > 0) v.invulnT -= dt; continue; }
     const inp = v.isLocal ? localInput() : v.aiInput(dt);
     v.physics(dt, inp);
-    if (v.isAI && !race.mp) aiFire(v, dt);
+    if (v.isAI && !race.mp) { aiFire(v, dt); aiSpecials(v, dt); }
     if (AUTODRIVE && v.isLocal) aiFire(v, dt);
   }
   // Kollisionen: zwei Kreise pro Fahrzeug (vorn/hinten), Auseinanderdrücken + Crash
@@ -1575,8 +1578,15 @@ function stepRace(dt) {
       const fa = aMov && bMov ? 0.5 : aMov ? 1 : 0, fb = aMov && bMov ? 0.5 : bMov ? 1 : 0;
       A.x -= nx * pen * fa; A.z -= nz * pen * fa; B.x += nx * pen * fb; B.z += nz * pen * fb;
       const rv = Math.hypot(sa * A.speed - sb * B.speed, ca * A.speed - cb * B.speed);
-      if (rv > 3.5 && A.crashCD <= 0 && B.crashCD <= 0 && race.time > 3000) onCrash(A, B);
-      else { if (aMov) A.speed *= 0.97; if (bMov) B.speed *= 0.97; }
+      // seitlich aneinander vorbeigleiten statt hängen zu bleiben
+      for (const [P, s, f] of [[A, -1, fa], [B, 1, fb]]) {
+        if (!f) continue;
+        const lx = Math.cos(P.h), lz = -Math.sin(P.h), raw = (nx * lx + nz * lz) * s, side = Math.abs(raw) < 0.1 ? s : Math.sign(raw);
+        const push = side * Math.min(pen, 0.6) * 0.35 * f;
+        P.x += lx * push; P.z += lz * push;
+        P.speed *= Math.pow(0.92, dt); // minimaler Reibungsverlust solange sie sich berühren
+      }
+      if (rv > 3.5 && A.crashCD <= 0 && B.crashCD <= 0 && race.time > 3000) onBump(A, B, nx, nz, rv);
     } else if (me && (A === me || B === me) && cd < 6 && hornCD <= 0) {
       const o = A === me ? B : A, rv = Math.abs(me.speed - o.speed);
       if (me.speed > 15 && rv > 6) { sfx.horn(); hornCD = 4; }
@@ -1594,13 +1604,13 @@ function stepRace(dt) {
       if (v.remote || v.left) continue;
       if (Math.hypot(v.x - it.x, v.z - it.z) < 2.5) {
         it.respawn = 5; it.mesh.visible = false; burst(it.x, it.z);
-        if (v.ammo < 3) v.ammo++;
-        if (v.isLocal) { sfx.pickup(); toast('📄 HA-Only Vertrag eingesammelt!'); updateItemHud(); }
+        giveLoot(v); // genau EIN Ergebnis: HA-Only 2/5 · Niete 2/5 · Business 1/5
         break;
       }
     }
   }
   updateProjectiles(dt);
+  updateSpecials(dt, now);
   for (const v of vs) {
     if (v.remote) { v.interp(now); v.idx = nearestIdx(v.x, v.z, v.idx); if (v.spinT > 0) v.spinT -= dt; if (v.invulnT > 0) v.invulnT -= dt; }
     v.render(dt);
@@ -1698,32 +1708,42 @@ function updateItemHud() {
   const me = race.me; const n = me ? me.ammo : 0;
   $('itemCount').textContent = 'x' + n;
   $('itemSlot').classList.toggle('empty', n <= 0);
-  $('tFire').style.opacity = n > 0 ? 1 : 0.4;
+  const f = $('tFire'); f.classList.toggle('disabled', n <= 0); f.setAttribute('aria-disabled', n <= 0 ? 'true' : 'false'); f.style.opacity = '';
 }
 let toastTimer = 0;
 function toast(msg, ms = 1500) { const t = $('toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add('hidden'), ms); window.__lastToast = msg; (window.__toasts = window.__toasts || []).push(msg); (window.__toastLog = window.__toastLog || []).push([Date.now(), msg]); }
 
 /* Crash, Blitzer, Norman */
 let hornCD = 0, normanNext = 0, normanTimer = 0;
-function onCrash(A, B) {
-  A.crashCD = B.crashCD = 1.2;
+// Fahrzeug-gegen-Fahrzeug: nur ein physischer Rempler – kein Drehen, kein Kontrollverlust
+const BUMP_KEEP = 0.96; // max. 4 % Tempoverlust
+function bumpNudge(P, nx, nz, s) {
+  // kleiner Seitenschubs weg vom anderen + minimaler Lenkimpuls
+  const lx = Math.cos(P.h), lz = -Math.sin(P.h), raw = (nx * lx + nz * lz) * s, side = Math.abs(raw) < 0.1 ? s : Math.sign(raw);
+  P.x += lx * side * 0.35; P.z += lz * side * 0.35;
+  P.h += side * 0.025 * Math.sign(P.speed || 1);
+  P.speed *= BUMP_KEEP;
+}
+function onBump(A, B, nx, nz, rv) {
+  A.crashCD = B.crashCD = 0.9;
   const near = A.isLocal || B.isLocal || distToLocal(A) < 70;
-  if (near) sfx.crash();
-  if (A.isLocal || B.isLocal) shakeT = 0.6;
-  burst((A.x + B.x) / 2, (A.z + B.z) / 2);
-  for (const [P, Q] of [[A, B], [B, A]]) {
-    if (P.remote) continue; // fremde Clients entscheiden selbst
-    if (P.hit()) {
-      if (P.isLocal) { toast('💥 Crash mit ' + Q.name + '!', 1800); window.__crashes = (window.__crashes || 0) + 1; }
-    }
-    if (race.mp && P.isLocal && Q.remote) Net.send('crash', { a: P.id, an: P.name, b: Q.id });
+  if (near) sfx.thud(Math.min(1, rv / 20));
+  if (A.isLocal || B.isLocal) { shakeT = Math.max(shakeT, 0.18); try { navigator.vibrate && navigator.vibrate(35); } catch (e) {} window.__bumps = (window.__bumps || 0) + 1; }
+  for (const [P, Q, s] of [[A, B, -1], [B, A, 1]]) {
+    if (P.remote) continue; // fremde Clients schubsen ihr Fahrzeug selbst
+    bumpNudge(P, nx, nz, s);
+    if (race.mp && P.isLocal && Q.remote) Net.send('crash', { a: P.id, b: Q.id, nx: +(-nx * s).toFixed(3), nz: +(-nz * s).toFixed(3), r: +rv.toFixed(1) });
   }
 }
 function onRemoteCrash(p) {
-  const me = race.me; if (!me || p.b !== me.id) return;
-  const o = race.vehicles.find(v => v.id === p.a);
-  me.crashCD = 1.2;
-  if (me.hit()) { sfx.crash(); shakeT = 0.6; toast('💥 Crash mit ' + (p.an || (o && o.name) || '?') + '!', 1800); window.__crashes = (window.__crashes || 0) + 1; }
+  // Gegner meldet einen Rempler mit mir: denselben kleinen Schubs anwenden (falls lokal noch nicht erkannt)
+  const me = race.me; if (!me || p.b !== me.id || me.crashCD > 0 || me.finished) return;
+  me.crashCD = 0.9;
+  const nx = +p.nx || 0, nz = +p.nz || 0; // Richtung von a zu mir
+  bumpNudge(me, nx, nz, 1);
+  sfx.thud(Math.min(1, (+p.r || 8) / 20)); shakeT = Math.max(shakeT, 0.18);
+  try { navigator.vibrate && navigator.vibrate(35); } catch (e) {}
+  window.__bumps = (window.__bumps || 0) + 1;
 }
 function flashBlitzer() {
   const bz = world.blitz; if (!bz) return;
@@ -2495,6 +2515,396 @@ function checkPoliceRadio(now) {
   } else Radio.fastSince = 0;
 }
 let normanQueued = false;
+/* =====================================================================
+   TV-VERTRÄGE (Kurven-Sammelobjekte) · RAKETE + NUKLEARPILZ
+   ?-BOX LOOT (HA-Only / Business-Mine / Niete) · BUSINESS-MINEN
+   ===================================================================== */
+const TV_MAX = 5, TV_RESPAWN = 14, ROCKET_R = 18, ROCKET_MAXHIT = 4, ROCKET_SPEED = 72;
+const LOOT = [['ha', 2], ['niete', 2], ['mine', 1]]; // Gewichte 2/5 · 2/5 · 1/5
+function rollLootKind(r = Math.random()) { let a = r * 5; for (const [k, w] of LOOT) { if (a < w) return k; a -= w; } return 'niete'; }
+
+/* ---------- Texturen ---------- */
+function tvTexture() {
+  const c = canvas(128, 128), g = c.getContext('2d');
+  g.strokeStyle = '#bff4ff'; g.lineWidth = 5; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(64, 30); g.lineTo(42, 8); g.moveTo(64, 30); g.lineTo(88, 6); g.stroke();
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  rr(8, 28, 112, 84, 16); g.fillStyle = '#0a5fd6'; g.fill(); g.lineWidth = 5; g.strokeStyle = '#ffffff'; g.stroke();
+  rr(18, 38, 74, 62, 10); const gr = g.createLinearGradient(0, 38, 0, 100); gr.addColorStop(0, '#7ff9ff'); gr.addColorStop(1, '#00b4e6'); g.fillStyle = gr; g.fill();
+  g.fillStyle = '#062a5a'; g.font = 'bold 34px "Trebuchet MS",Verdana,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('TV', 55, 62);
+  g.fillStyle = '#fff'; g.fillRect(36, 80, 38, 4); g.fillRect(36, 88, 26, 4);
+  g.fillStyle = '#ffd400'; g.beginPath(); g.arc(106, 52, 6, 0, 7); g.fill(); g.fillStyle = '#9fe8ff'; g.beginPath(); g.arc(106, 72, 6, 0, 7); g.fill();
+  return tex(c);
+}
+function glowTexture(col) {
+  const c = canvas(64, 64), g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, col); gr.addColorStop(0.35, col.replace(/[\d.]+\)$/, '0.45)')); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return tex(c);
+}
+function bizTexture() {
+  const c = canvas(128, 64), g = c.getContext('2d');
+  g.fillStyle = '#5b3a1e'; g.fillRect(0, 0, 128, 64); g.fillStyle = '#7a4f29'; g.fillRect(4, 4, 120, 56);
+  g.fillStyle = '#e8c35a'; g.fillRect(56, 4, 16, 10);
+  g.fillStyle = '#fff'; g.font = 'bold 17px "Trebuchet MS",Verdana,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('BUSINESS', 64, 30); g.font = 'bold 12px "Trebuchet MS",Verdana,sans-serif'; g.fillText('VERTRAG', 64, 48);
+  return tex(c);
+}
+
+/* ---------- TV-Verträge in den Kurven ---------- */
+const tvItems = []; let tvBuilt = false, tvMat = null, tvHaloMat = null;
+function curveK(i) { const N = track.N, a = track.tan[(i - 3 + N) % N], b = track.tan[(i + 3) % N]; return a.x * b.z - a.z * b.x; }
+function buildTvPickups() {
+  if (tvBuilt || !world || !track.N) return; tvBuilt = true;
+  const N = track.N, stepM = track.len / N, KTH = 0.085;
+  const avoid = [];
+  for (const f of [0.22, 0.5, 0.79]) avoid.push(Math.floor(N * f));
+  if (world.blitz) avoid.push(world.blitz.idx);
+  avoid.push(0);
+  const near = (i, d) => avoid.some(a => { const x = Math.abs(i - a); return Math.min(x, N - x) < d; });
+  // zusammenhängende Kurvenabschnitte finden (|Krümmung| > Schwelle)
+  const on = []; for (let i = 0; i < N; i++) on.push(Math.abs(curveK(i)) > KTH);
+  let s0 = 0; while (s0 < N && on[s0]) s0++;           // Start in einer Geraden
+  const segs = []; let cur = null;
+  for (let n = 1; n <= N; n++) { const i = (s0 + n) % N; if (on[i]) { if (!cur) cur = { a: i, len: 0 }; cur.len++; } else if (cur) { segs.push(cur); cur = null; } }
+  tvMat = new THREE.MeshBasicMaterial({ map: tvTexture(), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
+  tvHaloMat = new THREE.SpriteMaterial({ map: glowTexture('rgba(90,220,255,1)'), color: 0x66e6ff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false });
+  const geo = new THREE.PlaneGeometry(2.3, 2.3);
+  const spacing = Math.max(3, Math.round(6.5 / stepM));
+  let g = 0;
+  for (const sg of segs) {
+    if (sg.len < 5) continue;
+    // Scheitelpunkt = stärkste Krümmung
+    let apex = sg.a, km = 0;
+    for (let k = 0; k < sg.len; k++) { const i = (sg.a + k) % N, v = Math.abs(curveK(i)); if (v > km) { km = v; apex = i; } }
+    if (near(apex, 22)) continue;
+    const t1 = track.tan[(apex - 3 + N) % N], t2 = track.tan[(apex + 3) % N], l = track.left[apex];
+    const side = Math.sign((t2.x - t1.x) * l.x + (t2.z - t1.z) * l.z) || 1;   // Innenseite = Scheitel der Ideallinie
+    const cnt = 2 + ((apex * 7 + g * 3) % 3);                                    // 2–4 pro Kurve
+    const maxCnt = Math.max(2, Math.min(cnt, Math.floor(sg.len / spacing) + 1));
+    for (let j = 0; j < maxCnt; j++) {
+      const o = (j - (maxCnt - 1) / 2), i = (apex + Math.round(o * spacing) + N) % N;
+      if (Math.abs(curveK(i)) < KTH * 0.9) continue;                            // nur wirklich in der Kurve
+      const lat = side * (5.2 - Math.abs(o) * 0.9);
+      const p = track.pts[i], li = track.left[i], x = p.x + li.x * lat, z = p.z + li.z * lat;
+      const grp = new THREE.Group(); grp.position.set(x, 2.0, z);
+      const m = new THREE.Mesh(geo, tvMat); grp.add(m);
+      const halo = new THREE.Sprite(tvHaloMat); halo.scale.set(5.2, 5.2, 1); grp.add(halo);
+      world.group.add(grp);
+      tvItems.push({ i, x, z, lat, k: +curveK(i).toFixed(3), group: grp, spin: m, respawn: 0, ph: Math.random() * 6 });
+    }
+    g++;
+  }
+  window.__tvSpots = tvItems.map(t => ({ i: t.i, k: t.k, lat: +t.lat.toFixed(2), x: +t.x.toFixed(1), z: +t.z.toFixed(1) }));
+  window.__tvGroups = g;
+}
+
+/* ---------- HUD ---------- */
+function updateTvHud() {
+  const me = race.me, n = me ? me.tv | 0 : 0, full = n >= TV_MAX;
+  const h = $('hudTv'); if (h) { h.textContent = full ? '🚀 TV 5/5 – RAKETE!' : '📺 TV ' + n + '/' + TV_MAX; h.classList.toggle('ready', full); }
+  const b = $('tRocket'); if (b) { b.classList.toggle('ready', full); b.classList.toggle('disabled', !full); b.setAttribute('aria-disabled', full ? 'false' : 'true'); }
+  const mn = me ? me.mine | 0 : 0;
+  const ms = $('mineSlot'); if (ms) ms.classList.toggle('hidden', !mn);
+  const tm = $('tMine'); if (tm) { tm.classList.toggle('ready', !!mn); tm.classList.toggle('disabled', !mn); tm.setAttribute('aria-disabled', mn ? 'false' : 'true'); }
+}
+
+/* ---------- ?-Box Loot mit Slot-Animation ---------- */
+const LOOT_FACE = {
+  ha: '<div class="paper">HA-<br>Only</div>',
+  mine: '<div class="biz">💼<small>BUSINESS</small></div>',
+  niete: '<div class="niete">✖</div>'
+};
+let lootAnim = null;
+function giveLoot(v) {
+  const kind = rollLootKind();
+  if (kind === 'ha') { if (v.ammo < 3) v.ammo++; }
+  else if (kind === 'mine') { v.mine = 1; if (v.isAI) v.mineHoldT = 2 + Math.random() * 6; }
+  (window.__lootLog = window.__lootLog || []).push(kind);
+  if (v.isLocal) { sfx.pickup(); playLootRoll(kind); updateItemHud(); updateTvHud(); }
+  return kind;
+}
+function playLootRoll(kind) {
+  const el = $('lootRoll'); if (!el) return;
+  clearTimeout(lootAnim && lootAnim.t);
+  const order = ['ha', 'mine', 'niete']; let k = Math.floor(Math.random() * 3), step = 0, delay = 45;
+  el.classList.remove('hidden', 'landed');
+  const tick = () => {
+    if (step < 10) {
+      el.innerHTML = LOOT_FACE[order[k % 3]]; k++; step++; delay *= 1.13; tone(900 + (step % 3) * 160, 0.03, 'square', 0.03);
+      lootAnim.t = setTimeout(tick, delay);
+    } else {
+      el.innerHTML = LOOT_FACE[kind]; el.classList.add('landed');
+      toast(kind === 'ha' ? '📄 HA-Only Vertrag!' : kind === 'mine' ? '💼 BUSINESS-Vertrag! Hinter dir ablegen (💼 / B)' : '❌ Niete – leider nix!', 1700);
+      if (kind === 'niete') tone(220, 0.25, 'sawtooth', 0.05, 150);
+      lootAnim.t = setTimeout(() => el.classList.add('hidden'), 1100);
+    }
+  };
+  lootAnim = { t: 0 }; tick();
+}
+
+/* ---------- BUSINESS-Minen ---------- */
+const mines = []; let mineGeo = null, mineMat = null, mineLightMat = null, mineGlowMat = null, mineHandleGeo = null;
+function spawnMine(m) {
+  if (mines.find(q => q.id === m.id)) return null;
+  if (!mineGeo) {
+    mineGeo = new THREE.BoxGeometry(1.5, 1.0, 0.45);
+    const side = new THREE.MeshLambertMaterial({ color: 0x6b4423, emissive: 0x2a1608 }), face = new THREE.MeshLambertMaterial({ map: bizTexture(), emissive: 0x2a1608, emissiveMap: null });
+    mineMat = [side, side, side, side, face, face];
+    mineHandleGeo = new THREE.TorusGeometry(0.22, 0.06, 6, 12, Math.PI);
+    mineLightMat = new THREE.MeshBasicMaterial({ color: 0xff1a1a });
+    mineGlowMat = new THREE.SpriteMaterial({ map: glowTexture('rgba(255,40,40,1)'), color: 0xff3030, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  }
+  const g = new THREE.Group();
+  const box = new THREE.Mesh(mineGeo, mineMat); box.position.y = 0.55; g.add(box);
+  const hd = new THREE.Mesh(mineHandleGeo, mineMat[0]); hd.position.set(0, 1.05, 0); g.add(hd);
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), mineLightMat); led.position.set(0.5, 1.12, 0); g.add(led);
+  const glow = new THREE.Sprite(mineGlowMat.clone()); glow.scale.set(2.2, 2.2, 1); glow.position.copy(led.position); g.add(glow);
+  g.position.set(m.x, 0, m.z); g.rotation.y = m.h || 0; g.scale.setScalar(1.25); scene.add(g);
+  const q = { id: m.id, owner: m.owner, x: m.x, z: m.z, armAt: performance.now() + (m.arm == null ? 1100 : m.arm), group: g, led, glow, ph: Math.random() * 3 };
+  mines.push(q); window.__mines = mines.length; return q;
+}
+function removeMine(id) {
+  const k = mines.findIndex(q => q.id === id); if (k < 0) return false;
+  const q = mines[k]; scene.remove(q.group); q.glow.material.dispose(); mines.splice(k, 1); burst(q.x, q.z); window.__mines = mines.length; return true;
+}
+function dropMine(v) {
+  if (!v || !(v.mine > 0) || v.dsq || (v.finished && !v.isAI) || v.spinT > 0) return null;
+  v.mine = 0;
+  const m = { id: v.id + '-m' + uid(), owner: v.id, x: v.x - Math.sin(v.h) * 5.2, z: v.z - Math.cos(v.h) * 5.2, h: v.h };
+  spawnMine(m);
+  if (v.isLocal || distToLocal(v) < 60) tone(330, 0.12, 'square', 0.06, 180);
+  if (race.mp && v.isLocal) Net.send('md', { id: m.id, o: m.owner, x: +m.x.toFixed(2), z: +m.z.toFixed(2), h: +m.h.toFixed(2) });
+  if (v.isLocal) { toast('💼 Business-Vertrag abgelegt!', 1200); updateTvHud(); }
+  return m;
+}
+function updateMines(now) {
+  const blink = Math.floor(now / 380) % 2 === 0;
+  for (let k = mines.length - 1; k >= 0; k--) {
+    const q = mines[k];
+    q.led.visible = blink; q.glow.material.opacity = blink ? 0.55 + 0.4 * TOD.nightF : 0.08;
+    if (now < q.armAt) continue;
+    for (const v of race.vehicles) {
+      if (v.remote || v.left || v.dsq || v.out) continue;            // jeder Client prüft nur seine eigenen Fahrzeuge
+      if (Math.hypot(v.x - q.x, v.z - q.z) > 2.4) continue;
+      if (!v.hit()) continue;                                           // unverwundbar -> fährt durch, Mine bleibt
+      removeMine(q.id); window.__mineHits = (window.__mineHits || 0) + 1;
+      if (v.isLocal) { sfx.hit(); shakeT = Math.max(shakeT, 0.5); toast('💼 In einen Business-Vertrag gefahren!', 2000); }
+      else if (distToLocal(v) < 70) sfx.hit();
+      if (race.mp) Net.send('mh', { id: q.id, t: v.id });
+      break;
+    }
+  }
+}
+
+/* ---------- Rakete ---------- */
+const rockets = []; let rocketParts = null;
+function rocketMesh() {
+  if (!rocketParts) rocketParts = {
+    body: new THREE.CylinderGeometry(0.32, 0.36, 2.4, 10), nose: new THREE.ConeGeometry(0.32, 0.8, 10), fin: new THREE.BoxGeometry(0.06, 0.6, 0.6),
+    mW: new THREE.MeshLambertMaterial({ color: 0xf2f2f2, emissive: 0x333333 }), mR: new THREE.MeshLambertMaterial({ color: 0xE20074, emissive: 0x440022 }),
+    flame: new THREE.SpriteMaterial({ map: glowTexture('rgba(255,170,40,1)'), color: 0xffaa33, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })
+  };
+  const P = rocketParts, g = new THREE.Group(), inner = new THREE.Group(); inner.rotation.x = Math.PI / 2; g.add(inner);
+  inner.add(new THREE.Mesh(P.body, P.mW));
+  const n = new THREE.Mesh(P.nose, P.mR); n.position.y = 1.6; inner.add(n);
+  for (let k = 0; k < 3; k++) { const f = new THREE.Mesh(P.fin, P.mR); const a = k * Math.PI * 2 / 3; f.position.set(Math.cos(a) * 0.38, -1.0, Math.sin(a) * 0.38); f.rotation.y = -a; inner.add(f); }
+  const fl = new THREE.Sprite(P.flame); fl.scale.set(2.2, 2.2, 1); fl.position.z = -1.7; g.add(fl);
+  g.scale.setScalar(1.3); return { g, fl };
+}
+function pickRocketTarget(v) {
+  const N = track.N, cand = race.vehicles.filter(o => o !== v && !o.left && !o.dsq && !o.finished && !o.out);
+  let best = null, bs = -1e9;
+  for (const o of cand) {
+    const d = o.prog - v.prog; if (d < 2 || d > N * 0.6) continue;    // nur vor mir
+    const dens = cand.filter(q => q !== o && Math.hypot(q.x - o.x, q.z - o.z) < ROCKET_R).length;
+    const s = dens * 1000 - d; if (s > bs) { bs = s; best = o; }
+  }
+  if (!best) { let bd = 1e9; for (const o of cand) { const d = Math.hypot(o.x - v.x, o.z - v.z); if (d < bd) { bd = d; best = o; } } }
+  return best;
+}
+function fireRocket(v) {
+  if (!v || (v.tv | 0) < TV_MAX || v.dsq || v.spinT > 0 || (v.finished && !v.isAI)) return null;
+  v.tv = 0;
+  const t = pickRocketTarget(v);
+  const r = { id: v.id + '-r' + uid(), owner: v.id, ownerName: v.name, x: v.x + Math.sin(v.h) * 4, z: v.z + Math.cos(v.h) * 4, h: v.h, i: v.idx, dir: !!(t && t.prog - v.prog < 2), tgt: t ? t.id : null, auth: true, life: 0, v: Math.max(0, v.speed) + ROCKET_SPEED };
+  spawnRocket(r);
+  if (race.mp && v.isLocal) Net.send('rk', { id: r.id, o: r.owner, n: r.ownerName, x: +r.x.toFixed(2), z: +r.z.toFixed(2), h: +r.h.toFixed(3), i: r.i, d: r.dir ? 1 : 0, t: r.tgt, v: +r.v.toFixed(1) });
+  if (v.isLocal) { toast('🚀 RAKETE ab' + (t ? ' – Ziel: ' + t.name + '!' : '!'), 1600); updateTvHud(); }
+  window.__lastRocket = { id: r.id, owner: v.id, target: r.tgt };
+  return r;
+}
+function spawnRocket(r) {
+  if (rockets.find(q => q.id === r.id)) return;
+  const { g, fl } = rocketMesh(); g.position.set(r.x, 3.2, r.z); scene.add(g);
+  Object.assign(r, { mesh: g, flame: fl, smoke: 0 }); rockets.push(r);
+  const o = race.vehicles.find(q => q.id === r.owner);
+  if (!o || o.isLocal || distToLocal(o) < 90) { noise(0.9, 0.35, 400, 2600, 'bandpass', 0, 1.5); tone(180, 0.6, 'sawtooth', 0.05, 520); }
+}
+function removeRocket(id) { const k = rockets.findIndex(q => q.id === id); if (k < 0) return null; const r = rockets[k]; scene.remove(r.mesh); rockets.splice(k, 1); return r; }
+function updateRockets(dt) {
+  const N = track.N, stepM = track.len / N;
+  for (let k = rockets.length - 1; k >= 0; k--) {
+    const r = rockets[k]; r.life += dt;
+    const t = r.tgt && race.vehicles.find(q => q.id === r.tgt && !q.left);
+    let tx, tz, direct = false;
+    if (t) { const d = Math.hypot(t.x - r.x, t.z - r.z); if (d < 48 || r.dir) { direct = true; tx = t.x; tz = t.z; } }
+    if (!direct) {
+      // entlang der Strecke vorausfliegen
+      r.i = nearestIdx(r.x, r.z, r.i); const p = track.pts[(r.i + Math.max(6, Math.round(14 / stepM))) % N];
+      tx = p.x; tz = p.z;
+    }
+    const want = Math.atan2(tx - r.x, tz - r.z); r.h += clamp(wrapAng(want - r.h), -(direct ? 5 : 3.5) * dt, (direct ? 5 : 3.5) * dt);
+    r.x += Math.sin(r.h) * r.v * dt; r.z += Math.cos(r.h) * r.v * dt;
+    const y = 3.2 + Math.sin(r.life * 3) * 0.4 - (direct && t ? clamp(1 - Math.hypot(t.x - r.x, t.z - r.z) / 40, 0, 1) * 2.2 : 0);
+    r.mesh.position.set(r.x, y, r.z); r.mesh.rotation.y = r.h;
+    r.flame.material.opacity = 0.7 + Math.random() * 0.3; r.flame.scale.setScalar(1.8 + Math.random() * 0.8);
+    r.smoke += dt; if (r.smoke > 0.035) { r.smoke = 0; spawnPart(r.x - Math.sin(r.h) * 2.4, y, r.z - Math.cos(r.h) * 2.4, Math.random() < 0.3 ? 0xffaa33 : 0xcccccc, 0.6, 0.12); }
+    if (!r.auth) { if (r.life > 9) removeRocket(r.id); continue; }   // fremde Rakete: Einschlag kommt per 'rx'
+    let boom = r.life > 7;
+    if (t && Math.hypot(t.x - r.x, t.z - r.z) < 3.6) boom = true;
+    if (!t && r.life > 2.2) boom = true;
+    if (boom) rocketImpact(r);
+  }
+}
+function rocketImpact(r) {
+  removeRocket(r.id);
+  const victims = race.vehicles.filter(v => v.id !== r.owner && !v.left && !v.dsq && !v.out)
+    .map(v => [v, Math.hypot(v.x - r.x, v.z - r.z)]).filter(([, d]) => d <= ROCKET_R).sort((a, b) => a[1] - b[1]).slice(0, ROCKET_MAXHIT).map(([v]) => v);
+  const ids = victims.map(v => v.id);
+  const spun = applyRocketHits(ids, r.ownerName, r.owner);
+  nuke(r.x, r.z);
+  window.__lastRocket = Object.assign(window.__lastRocket || {}, { id: r.id, impact: [+r.x.toFixed(1), +r.z.toFixed(1)], affected: ids, spun, ownerSpin: +((race.vehicles.find(q => q.id === r.owner) || {}).spinT || 0).toFixed(2) });
+  if (race.mp) Net.send('rx', { id: r.id, o: r.owner, n: r.ownerName, x: +r.x.toFixed(2), z: +r.z.toFixed(2), ids });
+}
+function applyRocketHits(ids, byName, ownerId) {
+  const spun = [];
+  for (const id of ids) {
+    const v = race.vehicles.find(q => q.id === id); if (!v || v.id === ownerId) continue;
+    if (v.remote) { if (v.spinT <= 0) { v.spinT = 1.1; v.invulnT = 2.6; } spun.push(id); continue; }
+    if (v.hit()) { spun.push(id); if (v.isLocal) { toast('☢️ Von der Rakete erwischt! (' + byName + ')', 2200); shakeT = Math.max(shakeT, 0.6); } }
+  }
+  return spun;
+  // zählt NICHT als HA-Only-Treffer (kein countMyHit)
+}
+
+/* ---------- Nuklearpilz ---------- */
+const nukes = []; let nukeShared = null;
+function nuke(x, z) {
+  if (!nukeShared) nukeShared = {
+    sph: new THREE.IcosahedronGeometry(1, 1), stem: new THREE.CylinderGeometry(0.6, 1, 1, 12, 1, true), tor: new THREE.TorusGeometry(1, 0.42, 8, 20),
+    ring: new THREE.RingGeometry(0.86, 1, 48), flash: new THREE.SpriteMaterial({ map: glowTexture('rgba(255,250,220,1)'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+  };
+  const S = nukeShared, g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  const mk = (col, add) => new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 1, depthWrite: !add, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending });
+  const mCap = mk(0xffd27a), mStem = mk(0xff9a3c), mGlow = mk(0xff6a00, true), mRing = mk(0xfff0c0, true), mDust = mk(0x9a7a5e);
+  mRing.side = THREE.DoubleSide;
+  const cap = new THREE.Group(); g.add(cap);
+  const lumps = [];
+  const core = new THREE.Mesh(S.sph, mCap); core.scale.set(1, 0.6, 1); cap.add(core); lumps.push(core);
+  for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, m = new THREE.Mesh(S.sph, mCap); m.position.set(Math.cos(a) * 0.75, -0.05 + (k % 2) * 0.12, Math.sin(a) * 0.75); m.scale.setScalar(0.55); cap.add(m); lumps.push(m); }
+  const roll = new THREE.Mesh(S.tor, mStem); roll.rotation.x = Math.PI / 2; roll.position.y = -0.3; roll.scale.set(0.95, 0.95, 0.7); cap.add(roll);
+  const glow = new THREE.Mesh(S.sph, mGlow); glow.scale.setScalar(1.15); cap.add(glow);
+  const stem = new THREE.Mesh(S.stem, mStem); g.add(stem);
+  const dust = new THREE.Mesh(S.sph, mDust); dust.scale.set(4, 1.2, 4); dust.position.y = 0.6; g.add(dust);
+  const ring = new THREE.Mesh(S.ring, mRing); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.4; g.add(ring);
+  const fl = new THREE.Sprite(S.flash); fl.position.y = 6; g.add(fl);
+  nukes.push({ g, cap, stem, dust, ring, fl, glow, mats: [mCap, mStem, mGlow, mRing, mDust], t: 0 });
+  window.__nukes = (window.__nukes || 0) + 1;
+  // Ton, Kamerawackeln, Bildschirmblitz je nach Nähe
+  const me = race.me, d = me ? Math.hypot(me.x - x, me.z - z) : 999;
+  const k = clamp(1 - d / 260, 0.15, 1);
+  noise(3.0, 0.75 * k, 900, 35, 'lowpass'); tone(64, 1.8, 'sine', 0.28 * k, 22); noise(0.3, 0.45 * k, 3500, 400, 'lowpass'); noise(1.6, 0.18 * k, 260, 60, 'lowpass', 0.35);
+  if (d < 140) { shakeT = Math.max(shakeT, 0.35 + 0.9 * (1 - d / 140)); try { navigator.vibrate && navigator.vibrate([60, 40, 120]); } catch (e) {} }
+  if (d < 220) { const f = $('nukeFlash'); if (f) { f.style.opacity = String(clamp(1 - d / 240, 0.25, 0.9)); f.classList.remove('hidden'); requestAnimationFrame(() => requestAnimationFrame(() => { f.style.opacity = '0'; })); setTimeout(() => f.classList.add('hidden'), 900); } }
+  duckMusic(2.5);
+}
+const _cA = new THREE.Color(), _hot = new THREE.Color(0xfff4b0), _fire = new THREE.Color(0xff7a1a), _smoke = new THREE.Color(0x6e5c52), _stemS = new THREE.Color(0x7a6658);
+function updateNukes(dt) {
+  for (let k = nukes.length - 1; k >= 0; k--) {
+    const n = nukes[k]; n.t += dt; const t = n.t;
+    const rise = 1 - Math.pow(1 - clamp(t / 2.6, 0, 1), 3);              // ease-out
+    const capY = 4 + rise * 32, capS = 4 + rise * 11 + Math.max(0, t - 2.6) * 0.6;
+    n.cap.position.y = capY; n.cap.scale.set(capS, capS * 0.62, capS); n.cap.rotation.y += dt * 0.25;
+    n.stem.scale.set(2.2 + rise * 1.6, capY, 2.2 + rise * 1.6); n.stem.position.y = capY / 2;
+    const ds = 4 + rise * 16; n.dust.scale.set(ds, 1.2 + rise * 2.2, ds);
+    const rs = 1 + Math.min(1, t / 1.3) * 70; n.ring.scale.set(rs, rs, 1); n.mats[3].opacity = Math.max(0, 0.9 * (1 - t / 1.3));
+    n.fl.scale.setScalar(10 + Math.min(1, t / 0.25) * 70); n.fl.material.opacity = 1; n.fl.visible = t < 0.5; n.fl.material.opacity = Math.max(0, 1 - t / 0.5);
+    // Farbverlauf: weißglühend -> Feuer -> Rauch
+    const a = clamp(t / 0.9, 0, 1), b = clamp((t - 0.9) / 2.4, 0, 1);
+    _cA.copy(_hot).lerp(_fire, a).lerp(_smoke, b); n.mats[0].color.copy(_cA);
+    _cA.copy(_fire).lerp(_stemS, clamp((t - 0.6) / 2.2, 0, 1)); n.mats[1].color.copy(_cA);
+    n.mats[2].opacity = Math.max(0, 0.85 * (1 - t / 2.6)) * (0.85 + Math.random() * 0.15);
+    const fade = t > 5.2 ? Math.max(0, 1 - (t - 5.2) / 1.8) : 1;
+    // Kamera steht mitten im Pilz (Opfer am Einschlagort) -> Stiel/Staub durchsichtig, damit man weiter sieht
+    const cd = Math.hypot(camera.position.x - n.g.position.x, camera.position.z - n.g.position.z), see = cd < 14 ? 0.25 + 0.75 * clamp((cd - 6) / 8, 0, 1) : 1;
+    n.mats[0].opacity = fade; n.mats[1].opacity = fade * see; n.mats[4].opacity = fade * 0.85 * see;
+    n.mats[1].depthWrite = n.mats[4].depthWrite = see > 0.99;
+    if (t > 7) { scene.remove(n.g); n.mats.forEach(m => m.dispose()); nukes.splice(k, 1); }
+  }
+}
+
+/* ---------- KI: Rakete + Minen ---------- */
+function aiSpecials(v, dt) {
+  if (v.dsq || v.finished || v.spinT > 0 || race.time < 6000) return;
+  if ((v.tv | 0) >= TV_MAX && Math.random() < dt * 0.35) {
+    const t = pickRocketTarget(v); if (t && t.prog > v.prog && Math.hypot(t.x - v.x, t.z - v.z) < 220) fireRocket(v);
+  }
+  if (v.mine > 0) {
+    v.mineHoldT = (v.mineHoldT || 3) - dt;
+    const chaser = race.vehicles.some(o => o !== v && !o.left && o.prog < v.prog && v.prog - o.prog < 30);
+    if (v.mineHoldT <= 0 || (chaser && Math.random() < dt * 0.8)) dropMine(v);
+  }
+}
+
+/* ---------- Rennen-Hooks ---------- */
+function specialsRaceStart() {
+  buildTvPickups();
+  for (const v of race.vehicles) { v.tv = 0; v.mine = 0; }
+  for (const t of tvItems) { t.respawn = 0; t.group.visible = true; }
+  updateTvHud();
+}
+function clearSpecials() {
+  for (const q of mines.slice()) { scene.remove(q.group); q.glow.material.dispose(); } mines.length = 0; window.__mines = 0;
+  for (const r of rockets.slice()) removeRocket(r.id);
+  for (const n of nukes) { scene.remove(n.g); n.mats.forEach(m => m.dispose()); } nukes.length = 0;
+  for (const t of tvItems) { t.respawn = 0; t.group.visible = true; }
+  const el = $('lootRoll'); if (el) el.classList.add('hidden');
+}
+function updateSpecials(dt, now) {
+  // TV-Verträge drehen, leuchten nachts stärker, einsammeln
+  if (tvHaloMat) tvHaloMat.opacity = 0.22 + 0.6 * TOD.nightF + Math.sin(now * 0.006) * 0.08;
+  for (const it of tvItems) {
+    if (it.respawn > 0) { it.respawn -= dt; if (it.respawn <= 0) it.group.visible = true; else continue; }
+    it.spin.rotation.y += dt * 2.4; it.group.position.y = 2.0 + Math.sin(now * 0.004 + it.ph) * 0.25;
+    for (const v of race.vehicles) {
+      if (v.remote || v.left || v.dsq) continue;
+      if (Math.hypot(v.x - it.x, v.z - it.z) < 2.6) {
+        it.respawn = TV_RESPAWN; it.group.visible = false; sparkle(it.x, it.z); sparkle(it.x, it.z);
+        if ((v.tv | 0) < TV_MAX) v.tv = (v.tv | 0) + 1;
+        if (v.isLocal) { tone(1175, 0.08, 'triangle', 0.07); tone(1568, 0.1, 'triangle', 0.06, null, 0.06); if (v.tv >= TV_MAX) { toast('🚀 5 TV-Verträge – RAKETE bereit!', 1800); sfx.pickup(); } updateTvHud(); }
+        break;
+      }
+    }
+  }
+  updateMines(now);
+  updateRockets(dt);
+  updateNukes(dt);
+}
+function onSpecialMsg(ev, p) {
+  if (ev === 'rk') { if (!rockets.find(q => q.id === p.id)) spawnRocket({ id: p.id, owner: p.o, ownerName: p.n, x: p.x, z: p.z, h: p.h, i: p.i | 0, dir: !!p.d, tgt: p.t, v: p.v, auth: false, life: 0 }); return true; }
+  if (ev === 'rx') { removeRocket(p.id); applyRocketHits(p.ids || [], p.n || '?', p.o); nuke(p.x, p.z); window.__lastRocketRx = { id: p.id, affected: p.ids, x: p.x, z: p.z }; return true; }
+  if (ev === 'md') { spawnMine({ id: p.id, owner: p.o, x: p.x, z: p.z, h: p.h, arm: 600 }); return true; }
+  if (ev === 'mh') {
+    const had = removeMine(p.id);
+    const t = race.vehicles.find(q => q.id === p.t);
+    if (t && t.remote && t.spinT <= 0) { t.spinT = 1.1; t.invulnT = 2.6; }
+    window.__mineHitsRx = (window.__mineHitsRx || 0) + (had ? 1 : 0);
+    return true;
+  }
+  return false;
+}
+function doRocket() { if (!race.active || race.state !== 'run' || !race.me || race.me.finished) return; if ((race.me.tv | 0) < TV_MAX) { toast('📺 Erst 5 TV-Verträge in den Kurven sammeln!'); return; } fireRocket(race.me); }
+function doMine() { if (!race.active || race.state !== 'run' || !race.me || race.me.finished) return; if (!race.me.mine) { toast('💼 Kein Business-Vertrag – probier eine ?-Box!'); return; } dropMine(race.me); }
 
 /* =====================================================================
    MULTIPLAYER (Supabase Realtime: Presence + Broadcast, keine Tabellen)
@@ -2515,7 +2925,7 @@ const Net = {
     this.synced = false; this.syncedAt = 0;
     const ch = this.ch = sb.channel('rf1f-' + code, { config: { broadcast: { self: false }, presence: { key: this.me.id } } });
     ch.on('presence', { event: 'sync' }, () => this.onPresence());
-    for (const ev of ['start', 'st', 'fire', 'hit', 'fin', 'crash', 'bl', 'dsq']) ch.on('broadcast', { event: ev }, m => this.onMsg(ev, m.payload));
+    for (const ev of ['start', 'st', 'fire', 'hit', 'fin', 'crash', 'bl', 'dsq', 'rk', 'rx', 'md', 'mh']) ch.on('broadcast', { event: ev }, m => this.onMsg(ev, m.payload));
     await new Promise((res, rej) => {
       const to = setTimeout(() => rej(new Error('Zeitüberschreitung')), 12000);
       ch.subscribe(async s => {
@@ -2576,6 +2986,7 @@ const Net = {
     }
     if (!race.active || !race.mp) return;
     if (ev === 'crash') { onRemoteCrash(p); return; }
+    if (onSpecialMsg(ev, p)) return;
     const v = race.vehicles.find(q => q.id === (p.i || p.o || p.t));
     if (ev === 'st') {
       if (!v || !v.remote) return;
@@ -2757,6 +3168,8 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' || e.code === 'KeyP') { if (race.active && curScreen === null) $('btnPause').click(); else if (curScreen === 'scr-pause') $('btnResume').click(); }
   if (e.code === 'KeyM') setMute(!audio.muted);
   if (e.code === 'KeyN') setMusic(!music.on);
+  if (e.code === 'KeyR' && !e.repeat) doRocket();
+  if (e.code === 'KeyB' && !e.repeat) doMine();
   if (e.code === 'KeyH' && race.active && !e.repeat) sfx.horn();
   if (curScreen === 'scr-select') { if (e.code === 'ArrowLeft') changeTruck(-1); if (e.code === 'ArrowRight') changeTruck(1); if (e.code === 'Enter') { startSolo(); } }
   ensureAudio();
@@ -2809,7 +3222,10 @@ const touchState = { steer: 0, gas: false, brake: false, stickId: null, gasIds: 
 
   const fire = $('tFire');
   fire.addEventListener('pointerdown', e => { e.preventDefault(); ensureAudio(); doFire(); fire.classList.add('on'); if (navigator.vibrate) navigator.vibrate(15); setTimeout(() => fire.classList.remove('on'), 150); });
-  for (const el of [zone, gas, fire, $('touch')]) { el.addEventListener('contextmenu', e => e.preventDefault()); el.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); }
+  const rk = $('tRocket'), mn = $('tMine');
+  rk.addEventListener('pointerdown', e => { e.preventDefault(); ensureAudio(); doRocket(); rk.classList.add('on'); if (navigator.vibrate) navigator.vibrate(25); setTimeout(() => rk.classList.remove('on'), 150); });
+  mn.addEventListener('pointerdown', e => { e.preventDefault(); ensureAudio(); doMine(); mn.classList.add('on'); if (navigator.vibrate) navigator.vibrate(15); setTimeout(() => mn.classList.remove('on'), 150); });
+  for (const el of [zone, gas, fire, rk, mn, $('touch')]) { el.addEventListener('contextmenu', e => e.preventDefault()); el.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); }
 }
 function resetTouch() { touchState.resetStick && touchState.resetStick(); touchState.gas = false; touchState.gasIds.clear(); $('tGas').classList.remove('on'); }
 document.addEventListener('contextmenu', e => { if (race.active) e.preventDefault(); });
@@ -2873,6 +3289,14 @@ window.__rf1 = {
   camFree() { window.__camOverride = null; },
   radio() { return policeRadio(true); }, norman() { showNorman(); }, music() { return { on: music.on, theme: music.theme, step: music.step, ctx: audio.ctx && audio.ctx.state }; },
   tod() { return window.__tod; }, setHour(h) { return window.__setHour(h); },
+  giveTv(n = 5) { if (race.me) { race.me.tv = n; updateTvHud(); } },
+  giveMine() { if (race.me) { race.me.mine = 1; updateTvHud(); } },
+  rocket() { return fireRocket(race.me); }, dropMine() { return dropMine(race.me); }, rocketFrom(id) { const v = race.vehicles.find(q => q.id === id); if (v) { v.tv = 5; return fireRocket(v); } },
+  lootStats(n = 10000) { const c = { ha: 0, niete: 0, mine: 0 }; for (let k = 0; k < n; k++) c[rollLootKind()]++; return c; },
+  loot(kind) { const v = race.me; if (!v) return; if (kind === 'ha') { if (v.ammo < 3) v.ammo++; } else if (kind === 'mine') v.mine = 1; playLootRoll(kind); updateItemHud(); updateTvHud(); },
+  tvSpots() { return tvItems.map(t => ({ i: t.i, k: t.k, lat: t.lat, vis: t.group.visible })); }, curveK, track,
+  get mines() { return mines.map(q => ({ id: q.id, owner: q.owner, x: q.x, z: q.z })); }, get rockets() { return rockets.length; }, get nukes() { return nukes.length; },
+  placeIdx(i, lat = 0, speed = 0) { const me = race.me; if (!me) return; me.place(i % track.N, lat); me.speed = speed; me.updateProgress(true); snapCamera(); },
   giveAmmo(n = 3) { if (race.me) { race.me.ammo = n; updateItemHud(); } },
   fire() { doFire(); },
   hold(id) { const v = race.vehicles.find(q => q.id === id); if (v) { v.held = true; } }

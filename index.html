@@ -62,10 +62,12 @@
 
 <!-- Rennen HUD -->
 <section id="hud" class="hidden">
-  <div class="hud-tl"><div id="hudLap">RUNDE 1/3</div><div id="hudPos">POS 1/4</div><div id="hudBlitz" class="hud-blitz">📸 0/2</div></div>
+  <div class="hud-tl"><div id="hudLap">RUNDE 1/3</div><div id="hudPos">POS 1/4</div><div id="hudBlitz" class="hud-blitz">📸 0/2</div><div id="hudTv" class="hud-tv">📺 TV 0/5</div></div>
   <div class="hud-tc"><div id="hudTime">0:00.00</div><div id="hudLapTime">RUNDE 0:00.00</div><div id="hudBest"></div></div>
   <div class="hud-tr"><canvas id="minimap" width="120" height="120"></canvas></div>
-  <div id="itemSlot" class="item-slot"><div class="paper">HA-<br>Only</div><div id="itemCount">x1</div></div>
+  <div id="itemSlot" class="item-slot"><div class="paper">HA-<br>Only</div><div id="itemCount">x0</div></div>
+  <div id="mineSlot" class="mine-slot hidden" title="Business-Vertrag (Mine)">💼<small>BUSINESS</small></div>
+  <div id="lootRoll" class="loot-roll hidden"></div>
   <div id="hudSpeed" class="hud-speed">0</div><div id="hudDraft" class="hud-draft hidden">💨 WINDSCHATTEN</div>
   <div id="countdown" class="countdown hidden">3</div>
   <div id="toast" class="toast hidden"></div>
@@ -77,6 +79,7 @@
 
 <!-- Blitzer-Blitz + Norman-Anruf -->
 <div id="flash" class="flash"></div>
+<div id="nukeFlash" class="nuke-flash hidden"></div>
 <div id="radio" class="radio hidden" aria-live="polite"><div class="r-icon">📻</div><div class="r-body"><div class="r-head">POLIZEIFUNK · <span id="radioFrom">Zentrale</span> <i class="r-bars"><b></b><b></b><b></b><b></b></i></div><div id="radioMsg" class="r-msg"></div></div></div>
 <div id="norman" class="norman hidden" role="status" aria-live="polite">
   <div class="n-icon">📞</div>
@@ -90,6 +93,8 @@
   </div>
   <div class="tr">
     <button id="tFire" class="tbtn fire" aria-label="HA-Only Vertrag feuern">📄<small>FEUER</small></button>
+    <button id="tRocket" class="tbtn rocket disabled" aria-label="Rakete abfeuern">🚀<small>RAKETE</small></button>
+    <button id="tMine" class="tbtn mine disabled" aria-label="Business-Vertrag ablegen">💼</button>
     <button id="tGas" class="tbtn gas" aria-label="Gas">GAS</button>
   </div>
 </section>
